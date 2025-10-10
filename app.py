@@ -71,6 +71,34 @@ EXCLUDE_PHRASES = [
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 BASE = "https://www.profession.hu/allasok/1,0,0,{}?rss"
 
+# Portálok definiálása
+PORTALS = {
+    "profession": {
+        "name": "Profession.hu",
+        "description": "Magyarország legnagyobb álláskereső portálja",
+        "status": "Aktív",
+        "enabled": True
+    },
+    "jobline": {
+        "name": "Jobline.hu",
+        "description": "IT specializált álláskereső portál",
+        "status": "Tervezés alatt",
+        "enabled": False
+    },
+    "cvonline": {
+        "name": "CV-Online.hu",
+        "description": "Népszerű álláskereső portál",
+        "status": "Tervezés alatt",
+        "enabled": False
+    },
+    "indeed": {
+        "name": "Indeed.hu",
+        "description": "Nemzetközi álláskereső portál",
+        "status": "Tervezés alatt",
+        "enabled": False
+    }
+}
+
 # Kategóriák definiálása - legnépszerűbb fejlesztői területek
 CATEGORIES = {
     "java": {"name": "Java", "keywords": ["java", "spring", "spring boot", "maven", "gradle", "hibernate", "jpa", "microservices", "jakarta", "junit", "mockito"]},
@@ -278,6 +306,10 @@ def run_scraper_async(selected_categories, progress_queue):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/api/portals')
+def get_portals():
+    return jsonify(PORTALS)
 
 @app.route('/api/categories')
 def get_categories():
