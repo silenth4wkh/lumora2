@@ -176,7 +176,7 @@ def is_probably_dev(title: str, desc: str) -> bool:
         return False
     return True
 
-def fetch_html_jobs(source_name: str, url: str, max_pages: int = 3):
+def fetch_html_jobs(source_name: str, url: str, max_pages: int = 5):
     """HTML scraping a Profession.hu álláslistákról - több oldal feldolgozása"""
     if not BeautifulSoup:
         print("BeautifulSoup nincs telepítve, RSS fallback használata")
@@ -577,22 +577,32 @@ def search_jobs():
         # Alap IT főfeed
         search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
         
-        # HTML scraping - több oldal feldolgozása
+        # HTML scraping - kevesebb kulcsszó, de több oldal
         priority_keywords = [
-            # Legfontosabb nyelvek
-            "java", "python", "c#", ".net", "javascript", "typescript", "php",
-            # Legfontosabb frameworkök  
-            "react", "angular", "vue", "spring", "django", "laravel", "node.js",
-            # Legfontosabb területek
+            # Legfontosabb területek (kevesebb duplikáció)
+            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök",
             "frontend", "backend", "full stack", "devops", "data scientist", "mobile",
-            # Magyar kulcsszavak
-            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök"
+            # Legfontosabb nyelvek
+            "java", "python", "c#", ".net", "javascript", "typescript", "php"
         ]
         
         for keyword in priority_keywords:
             if keyword in ALL_KEYWORDS:
                 # HTML scraping URL (nem RSS)
                 search_queries.append((f"Profession – {keyword}", f"https://www.profession.hu/allasok/1,0,0,{quote(keyword, safe='')}"))
+        
+        # Alternatív megközelítés: különböző szűrőkkel
+        alternative_searches = [
+            ("Profession – IT Budapest", "https://www.profession.hu/allasok/1,0,0,fejlesztő?location=budapest"),
+            ("Profession – IT Remote", "https://www.profession.hu/allasok/1,0,0,programozó?workplace=remote"),
+            ("Profession – IT Senior", "https://www.profession.hu/allasok/1,0,0,szoftver?seniority=senior"),
+            ("Profession – IT Junior", "https://www.profession.hu/allasok/1,0,0,alkalmazásfejlesztő?seniority=junior"),
+            ("Profession – IT Új", "https://www.profession.hu/allasok/1,0,0,rendszermérnök?date=1"),  # Utolsó 24 óra
+            ("Profession – IT Heti", "https://www.profession.hu/allasok/1,0,0,alkalmazásfejlesztő?date=7")  # Utolsó 7 nap
+        ]
+        
+        for name, url in alternative_searches:
+            search_queries.append((name, url))
         
         print(f"🔍 Összesen {len(search_queries)} kulcsszavas keresés + IT főfeed")
         print(f"📝 Kulcsszavak: {len(ALL_KEYWORDS)} egyedi kulcsszó")
@@ -672,6 +682,10 @@ def search_jobs():
                 per_source_skipped[name] = skipped
                 
                 print(f"   ✅ Megtartva: {kept}, Kihagyva: {skipped}")
+                
+                # Debug: duplikáció statisztikák
+                if kept > 0:
+                    print(f"   📊 Duplikációk: {skipped} (összesen {len(seen_links)} egyedi link)")
                 
                 # Kímélet a szerver felé (feedek között)
                 time.sleep(0.15)
