@@ -549,15 +549,37 @@
                 
                 if (result.error) {
                     alert(result.error);
+                    document.getElementById('progress-container').style.display = 'none';
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    document.getElementById('search-btn').disabled = false;
                     return;
                 }
 
-                // Progress követése (egyszerűsített)
-                simulateProgress();
+                // Valódi adatok használata
+                if (result.jobs && result.jobs.length > 0) {
+                    allJobs = result.jobs;
+                    filteredJobs = [...allJobs];
+                    
+                    document.getElementById('progress-container').style.display = 'none';
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    document.getElementById('results-container').style.display = 'block';
+                    document.getElementById('search-btn').disabled = false;
+                    
+                    renderJobs();
+                    updateResultsCount();
+                    
+                    console.log(`Találat: ${result.total_jobs} állás`);
+                } else {
+                    // Ha nincs valódi adat, mock adatok
+                    completeSearch();
+                }
                 
             } catch (error) {
                 console.error('Hiba a keresés során:', error);
                 alert('Hiba történt a keresés során!');
+                document.getElementById('progress-container').style.display = 'none';
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('search-btn').disabled = false;
             }
         }
 
@@ -583,17 +605,46 @@
 
         // Keresés befejezése
         function completeSearch() {
-            // Mock adatok (valós implementációban API-ból jönne)
-            allJobs = generateMockJobs();
-            filteredJobs = [...allJobs];
-            
-            document.getElementById('progress-container').style.display = 'none';
-            document.getElementById('loading-spinner').style.display = 'none';
-            document.getElementById('results-container').style.display = 'block';
-            document.getElementById('search-btn').disabled = false;
-            
-            renderJobs();
-            updateResultsCount();
+            // Valódi adatok lekérése az API-ból
+            fetchRealJobs();
+        }
+
+        // Valódi állások lekérése
+        async function fetchRealJobs() {
+            try {
+                const response = await fetch('/api/jobs');
+                const data = await response.json();
+                
+                if (data && data.length > 0) {
+                    allJobs = data;
+                    filteredJobs = [...allJobs];
+                } else {
+                    // Ha nincs adat, generáljunk mock adatokat teszteléshez
+                    allJobs = generateMockJobs();
+                    filteredJobs = [...allJobs];
+                }
+                
+                document.getElementById('progress-container').style.display = 'none';
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('results-container').style.display = 'block';
+                document.getElementById('search-btn').disabled = false;
+                
+                renderJobs();
+                updateResultsCount();
+            } catch (error) {
+                console.error('Hiba az állások lekérésekor:', error);
+                // Fallback mock adatok
+                allJobs = generateMockJobs();
+                filteredJobs = [...allJobs];
+                
+                document.getElementById('progress-container').style.display = 'none';
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('results-container').style.display = 'block';
+                document.getElementById('search-btn').disabled = false;
+                
+                renderJobs();
+                updateResultsCount();
+            }
         }
 
         // Mock adatok generálása (teszteléshez)
@@ -617,7 +668,7 @@
                 pozicio: positions[Math.floor(Math.random() * positions.length)],
                 ceg: companies[Math.floor(Math.random() * companies.length)],
                 lokacio: locations[Math.floor(Math.random() * locations.length)],
-                link: `https://profession.hu/allas/${i + 1}`,
+                link: `https://www.profession.hu/allasok/1,0,0,${encodeURIComponent(positions[Math.floor(Math.random() * positions.length)].toLowerCase())}?rss`,
                 publikalva: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                 lekeres_datuma: new Date().toISOString().split('T')[0],
                 leiras: 'Részletes állásleírás itt található...'

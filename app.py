@@ -256,8 +256,10 @@ def run_scraper_async(selected_categories, progress_queue):
         try:
             items = fetch_rss_items(name, url)
             progress_queue.put({"debug": f"{name}: {len(items)} állás találva"})
+            print(f"DEBUG: {name} - {len(items)} állás")
         except Exception as e:
             progress_queue.put({"error": f"Kihagyva ({name}): {str(e)}"})
+            print(f"ERROR: {name} - {str(e)}")
             continue
 
         for it in items:
@@ -291,6 +293,10 @@ def run_scraper_async(selected_categories, progress_queue):
 
         time.sleep(0.1)
     
+    # Globális változó frissítése
+    global scraped_jobs
+    scraped_jobs = all_rows
+    
     progress_queue.put({
         "progress": 100, 
         "status": "Kész!", 
@@ -323,26 +329,88 @@ def search_jobs():
     if not selected_categories:
         return jsonify({"error": "Válassz legalább egy kategóriát!"}), 400
     
-    # Progress queue a valós idejű frissítésekhez
-    progress_queue = queue.Queue()
-    
-    # Scraper indítása háttérben
-    thread = threading.Thread(target=run_scraper_async, args=(selected_categories, progress_queue))
-    thread.daemon = True
-    thread.start()
-    
-    return jsonify({"message": "Keresés elindítva", "task_id": "search_1"})
+    try:
+        # Scraper futtatása szinkron módon (egyszerűsített verzió)
+        all_rows = []
+        seen_links = set()
+        
+        # Feed lista generálása
+        feed_list = [
+            ("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"),
+            ("Profession – Fejlesztő", "https://www.profession.hu/allasok/1,0,0,fejlesztő?rss"),
+            ("Profession – Programozó", "https://www.profession.hu/allasok/1,0,0,programozó?rss"),
+            ("Profession – Szoftver", "https://www.profession.hu/allasok/1,0,0,szoftver?rss")
+        ]
+        
+        # Csak a legfontosabb kulcsszavakhoz generálunk feedet
+        for cat_id in selected_categories:
+            if cat_id in CATEGORIES:
+                keywords = CATEGORIES[cat_id]["keywords"][:2]  # Csak az első 2 kulcsszó
+                for keyword in keywords:
+                    feed_list.append((f"Profession – {keyword}", build_feed_url(keyword)))
+        
+        sess = requests.Session()
+        
+        for name, url in feed_list:
+            try:
+                items = fetch_rss_items(name, url)
+                print(f"DEBUG: {name} - {len(items)} állás")
+                
+                for it in items:
+                    link = it["Link"]
+                    if not link or link in seen_links:
+                        continue
+
+                    title = it["Pozíció"]
+                    desc = it["Leírás"]
+                    if not is_probably_dev(title, desc):
+                        continue
+
+                    # Egyszerűsített enrichment (csak a leírásból)
+                    company = parse_company_from_summary(desc)
+                    
+                    seen_links.add(link)
+                    all_rows.append({
+                        "id": len(all_rows) + 1,
+                        "forras": it["Forrás"],
+                        "pozicio": title,
+                        "ceg": company or "N/A",
+                        "lokacio": "N/A",  # Egyszerűsített verzió
+                        "link": link,
+                        "publikalva": it["Publikálva"],
+                        "lekeres_datuma": datetime.today().strftime("%Y-%m-%d"),
+                        "leiras": (desc[:200] if isinstance(desc, str) else "")
+                    })
+
+            except Exception as e:
+                print(f"ERROR: {name} - {str(e)}")
+                continue
+        
+        # Globális változó frissítése
+        global scraped_jobs
+        scraped_jobs = all_rows
+        
+        return jsonify({
+            "message": "Keresés befejezve", 
+            "total_jobs": len(all_rows),
+            "jobs": all_rows[:10]  # Első 10 állás
+        })
+        
+    except Exception as e:
+        return jsonify({"error": f"Hiba a keresés során: {str(e)}"}), 500
 
 @app.route('/api/progress')
 def get_progress():
     # Egyszerűsített progress - valós implementációban session/task ID kellene
     return jsonify({"progress": 0, "status": "Keresés..."})
 
+# Globális változó a scraped adatok tárolásához
+scraped_jobs = []
+
 @app.route('/api/jobs')
 def get_jobs():
-    # Itt visszaadnánk a megtalált állásokat
-    # Valós implementációban adatbázisból vagy cache-ből
-    return jsonify([])
+    # Visszaadjuk a scraped állásokat
+    return jsonify(scraped_jobs)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
