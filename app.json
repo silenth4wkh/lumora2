@@ -1,0 +1,12 @@
+{
+  "name": "IT Allaskereso",
+  "description": "IT job scraper with Flask frontend",
+  "repository": "https://github.com/silenth4wkh/lumora2",
+  "keywords": ["python", "flask", "scraper", "jobs"],
+  "success_url": "/",
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    }
+  ]
+}
