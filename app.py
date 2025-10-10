@@ -334,32 +334,39 @@ def search_jobs():
         all_rows = []
         seen_links = set()
         
-        # Feed lista generálása - több IT főfeed a jobb lefedettségért
-        feed_list = [
-            ("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"),
-            ("Profession – Fejlesztő", "https://www.profession.hu/allasok/1,0,0,fejlesztő?rss"),
-            ("Profession – Programozó", "https://www.profession.hu/allasok/1,0,0,programozó?rss"),
-            ("Profession – Szoftver", "https://www.profession.hu/allasok/1,0,0,szoftver?rss"),
-            ("Profession – Szoftvermérnök", "https://www.profession.hu/allasok/1,0,0,szoftvermérnök?rss"),
-            ("Profession – Rendszermérnök", "https://www.profession.hu/allasok/1,0,0,rendszermérnök?rss"),
-            ("Profession – Alkalmazásfejlesztő", "https://www.profession.hu/allasok/1,0,0,alkalmazásfejlesztő?rss"),
-            ("Profession – Full Stack", "https://www.profession.hu/allasok/1,0,0,full%20stack?rss"),
-            ("Profession – Frontend", "https://www.profession.hu/allasok/1,0,0,frontend?rss"),
-            ("Profession – Backend", "https://www.profession.hu/allasok/1,0,0,backend?rss")
-        ]
+        # Kulcsszavas keresés - minden kulcsszóhoz külön keresés
+        search_queries = []
         
-        # Több kulcsszó használata a jobb lefedettségért
+        # Alapvető IT kulcsszavak - minden releváns pozíció
+        base_keywords = [
+            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök", "alkalmazásfejlesztő",
+            "full stack", "frontend", "backend", "web fejlesztő", "mobil fejlesztő", "app fejlesztő",
+            "devops", "cloud engineer", "system administrator", "network engineer", "security engineer",
+            "data scientist", "data engineer", "machine learning", "ai engineer", "big data",
+            "qa engineer", "test engineer", "automation engineer", "performance engineer",
+            "database administrator", "dba", "sql developer", "bi developer", "analyst",
+            "project manager", "scrum master", "product owner", "business analyst",
+            "it consultant", "solution architect", "technical lead", "team lead"
+        ]
+        search_queries.extend([(f"Profession – {kw}", kw) for kw in base_keywords])
+        
+        # Kiválasztott kategóriák kulcsszavai (duplikáció elkerülése)
+        existing_keywords = set(base_keywords)
         for cat_id in selected_categories:
             if cat_id in CATEGORIES:
-                keywords = CATEGORIES[cat_id]["keywords"][:8]  # Az első 8 kulcsszó
+                keywords = CATEGORIES[cat_id]["keywords"]  # Összes kulcsszó
                 for keyword in keywords:
-                    feed_list.append((f"Profession – {keyword}", build_feed_url(keyword)))
+                    if keyword.lower() not in existing_keywords:
+                        search_queries.append((f"Profession – {keyword}", keyword))
+                        existing_keywords.add(keyword.lower())
         
         sess = requests.Session()
         
-        for name, url in feed_list:
+        for name, keyword in search_queries:
             try:
-                items = fetch_rss_items(name, url)
+                # Kulcsszavas keresés URL generálása
+                search_url = build_feed_url(keyword)
+                items = fetch_rss_items(name, search_url)
                 print(f"DEBUG: {name} - {len(items)} állás")
                 
                 for it in items:
@@ -396,10 +403,14 @@ def search_jobs():
         global scraped_jobs
         scraped_jobs = all_rows
         
+        print(f"KERESÉS BEFEJEZVE: {len(all_rows)} állás találva, {len(search_queries)} kulcsszóval")
+        
         return jsonify({
             "message": "Keresés befejezve", 
             "total_jobs": len(all_rows),
-            "jobs": all_rows[:10]  # Első 10 állás
+            "total_searches": len(search_queries),
+            "unique_links": len(seen_links),
+            "jobs": all_rows[:20]  # Első 20 állás
         })
         
     except Exception as e:
