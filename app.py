@@ -577,13 +577,11 @@ def search_jobs():
         # Alap IT főfeed
         search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
         
-        # HTML scraping - kevesebb kulcsszó, de több oldal
+        # HTML scraping - csak a legfontosabb kulcsszavak
         priority_keywords = [
             # Legfontosabb területek (kevesebb duplikáció)
             "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök",
-            "frontend", "backend", "full stack", "devops", "data scientist", "mobile",
-            # Legfontosabb nyelvek
-            "java", "python", "c#", ".net", "javascript", "typescript", "php"
+            "frontend", "backend", "full stack", "devops", "data scientist", "mobile"
         ]
         
         for keyword in priority_keywords:
@@ -591,14 +589,20 @@ def search_jobs():
                 # HTML scraping URL (nem RSS)
                 search_queries.append((f"Profession – {keyword}", f"https://www.profession.hu/allasok/1,0,0,{quote(keyword, safe='')}"))
         
-        # Alternatív megközelítés: különböző szűrőkkel
+        # Alternatív megközelítés: teljesen különböző keresések
         alternative_searches = [
-            ("Profession – IT Budapest", "https://www.profession.hu/allasok/1,0,0,fejlesztő?location=budapest"),
-            ("Profession – IT Remote", "https://www.profession.hu/allasok/1,0,0,programozó?workplace=remote"),
-            ("Profession – IT Senior", "https://www.profession.hu/allasok/1,0,0,szoftver?seniority=senior"),
-            ("Profession – IT Junior", "https://www.profession.hu/allasok/1,0,0,alkalmazásfejlesztő?seniority=junior"),
-            ("Profession – IT Új", "https://www.profession.hu/allasok/1,0,0,rendszermérnök?date=1"),  # Utolsó 24 óra
-            ("Profession – IT Heti", "https://www.profession.hu/allasok/1,0,0,alkalmazásfejlesztő?date=7")  # Utolsó 7 nap
+            # Különböző pozíciók
+            ("Profession – IT Manager", "https://www.profession.hu/allasok/1,0,0,it%20manager"),
+            ("Profession – System Admin", "https://www.profession.hu/allasok/1,0,0,rendszergazda"),
+            ("Profession – Database", "https://www.profession.hu/allasok/1,0,0,adatbázis"),
+            ("Profession – Network", "https://www.profession.hu/allasok/1,0,0,hálózat"),
+            ("Profession – Security", "https://www.profession.hu/allasok/1,0,0,biztonság"),
+            # Különböző technológiák
+            ("Profession – Docker", "https://www.profession.hu/allasok/1,0,0,docker"),
+            ("Profession – Kubernetes", "https://www.profession.hu/allasok/1,0,0,kubernetes"),
+            ("Profession – AWS", "https://www.profession.hu/allasok/1,0,0,aws"),
+            ("Profession – Azure", "https://www.profession.hu/allasok/1,0,0,azure"),
+            ("Profession – SQL", "https://www.profession.hu/allasok/1,0,0,sql")
         ]
         
         for name, url in alternative_searches:
@@ -647,7 +651,13 @@ def search_jobs():
                 
                 for it in items:
                     link = it["Link"]
-                    if not link or link in seen_links:
+                    if not link:
+                        skipped += 1
+                        continue
+
+                    # Csak a teljes link alapján duplikáció ellenőrzés (nem a session paraméterek miatt)
+                    clean_link = link.split('?')[0]  # Eltávolítjuk a query paramétereket
+                    if clean_link in seen_links:
                         skipped += 1
                         continue
 
@@ -661,14 +671,14 @@ def search_jobs():
                     company = it.get("Cég", "") or parse_company_from_summary(desc) or "N/A"
                     location = it.get("Lokáció", "") or "N/A"
 
-                    seen_links.add(link)
+                    seen_links.add(clean_link)
                     all_rows.append({
                         "id": len(all_rows) + 1,
                         "forras": it["Forrás"],
                         "pozicio": title,
                         "ceg": company or "N/A",
                         "lokacio": location or "N/A",
-                        "link": link,
+                        "link": link,  # Eredeti linket tároljuk
                         "publikalva": it["Publikálva"],
                         "lekeres_datuma": datetime.today().strftime("%Y-%m-%d"),
                         "leiras": (desc[:200] if isinstance(desc, str) else "")
@@ -686,6 +696,8 @@ def search_jobs():
                 # Debug: duplikáció statisztikák
                 if kept > 0:
                     print(f"   📊 Duplikációk: {skipped} (összesen {len(seen_links)} egyedi link)")
+                    if skipped > kept:
+                        print(f"   ⚠️ Sok duplikáció - valószínűleg ugyanazok az állások különböző kulcsszavakkal")
                 
                 # Kímélet a szerver felé (feedek között)
                 time.sleep(0.15)
