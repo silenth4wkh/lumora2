@@ -99,20 +99,65 @@ PORTALS = {
     }
 }
 
-# Kategóriák definiálása - legnépszerűbb fejlesztői területek
+# ——————————————————————————
+# Kulcsszó-katalógus (maximalista, bővíthető)
+# ——————————————————————————
+KW_LANG = [
+    "java","python","c#",".net","dotnet","c++","cpp","golang","go","rust","php","ruby","scala","haskell",
+    "kotlin","swift","objective-c"
+]
+KW_FE = [
+    "frontend","front-end","react","angular","vue","svelte","next.js","nuxt","typescript","javascript","web developer"
+]
+KW_BE = [
+    "backend","back-end","node","spring","spring boot","quarkus",".net core","asp.net","laravel","symfony","django","flask","fastapi"
+]
+KW_MOBILE = [
+    "android","ios","mobile","kotlin","swift","flutter","react native","xamarin","ionic"
+]
+KW_DATA = [
+    "data engineer","data scientist","ml engineer","machine learning","ai engineer","big data",
+    "etl","elt","dwh","data warehouse","power bi","tableau","qlik","sql","spark","hadoop","db developer","snowflake","databricks"
+]
+KW_DEVOPS = [
+    "devops","sre","site reliability","platform engineer","cloud engineer","kubernetes","docker","terraform","ansible",
+    "aws","azure","gcp","cloud architect","finops","observability"
+]
+KW_TEST = [
+    "qa","test automation","tesztautomatizálás","tesztmérnök","sdet","cypress","selenium","playwright","jmeter","postman"
+]
+KW_EMBED = [
+    "embedded","firmware","fpga","rtos","bare metal","microcontroller","stm32","esp32","embedded linux","yocto","driver developer","c developer"
+]
+KW_SECURITY = [
+    "security engineer","application security","appsec","devsecops","penetration tester","pentest","iam","siem","soc"
+]
+KW_ENTERPRISE = [
+    "sap","abap","erp","crm","salesforce","servicenow","mendix","outsystems","navision","business central","oracle developer","ms dynamics"
+]
+KW_GENERAL_HU = [
+    "fejlesztő","programozó","szoftver","szoftvermérnök","rendszermérnök","alkalmazásfejlesztő","alkalmazás üzemeltető","full stack","full-stack"
+]
+
+# Összes kulcsszó egy listában
+ALL_KEYWORDS = (
+    KW_LANG + KW_FE + KW_BE + KW_MOBILE + KW_DATA + KW_DEVOPS +
+    KW_TEST + KW_EMBED + KW_SECURITY + KW_ENTERPRISE + KW_GENERAL_HU
+)
+
+# Kategóriák definiálása a frontend-hez
 CATEGORIES = {
-    "java": {"name": "Java", "keywords": ["java", "spring", "spring boot", "maven", "gradle", "hibernate", "jpa", "microservices", "jakarta", "junit", "mockito", "java developer", "java fejlesztő"]},
-    "javascript": {"name": "JavaScript", "keywords": ["javascript", "js", "node.js", "nodejs", "express", "npm", "yarn", "webpack", "babel", "es6", "typescript", "ts", "javascript developer", "js fejlesztő"]},
-    "python": {"name": "Python", "keywords": ["python", "django", "flask", "fastapi", "pandas", "numpy", "tensorflow", "pytorch", "scikit-learn", "celery", "redis", "python developer", "python fejlesztő"]},
-    "php": {"name": "PHP", "keywords": ["php", "laravel", "symfony", "composer", "wordpress", "drupal", "magento", "codeigniter", "yii", "phalcon", "php developer", "php fejlesztő"]},
-    "react": {"name": "React", "keywords": ["react", "reactjs", "redux", "next.js", "nextjs", "gatsby", "jsx", "hooks", "context", "router", "react developer", "react fejlesztő"]},
-    "angular": {"name": "Angular", "keywords": ["angular", "angularjs", "rxjs", "ngrx", "typescript", "material", "cli", "universal", "ivy", "angular developer", "angular fejlesztő"]},
-    "vue": {"name": "Vue.js", "keywords": ["vue", "vuejs", "nuxt", "nuxtjs", "vuex", "pinia", "composition api", "vite", "quasar", "vue developer", "vue fejlesztő"]},
-    "devops": {"name": "DevOps", "keywords": ["devops", "docker", "kubernetes", "jenkins", "gitlab", "github actions", "terraform", "ansible", "aws", "azure", "gcp", "devops engineer", "devops mérnök"]},
-    "dotnet": {"name": ".NET", "keywords": [".net", "dotnet", "c#", "csharp", "asp.net", "entity framework", "blazor", "xamarin", "maui", "core", ".net developer", ".net fejlesztő"]},
-    "mobile": {"name": "Mobile", "keywords": ["android", "ios", "flutter", "react native", "swift", "kotlin", "xamarin", "ionic", "cordova", "pwa", "mobile developer", "mobil fejlesztő"]},
-    "data": {"name": "Data & AI", "keywords": ["data scientist", "machine learning", "ai", "big data", "sql", "postgresql", "mysql", "mongodb", "elasticsearch", "kafka", "data engineer", "adat mérnök"]},
-    "testing": {"name": "Testing", "keywords": ["qa", "test automation", "selenium", "cypress", "jest", "junit", "pytest", "sdet", "performance testing", "api testing", "tesztelő", "tesztmérnök"]}
+    "languages": {"name": "Programozási nyelvek", "keywords": KW_LANG},
+    "frontend": {"name": "Frontend fejlesztés", "keywords": KW_FE},
+    "backend": {"name": "Backend fejlesztés", "keywords": KW_BE},
+    "mobile": {"name": "Mobil fejlesztés", "keywords": KW_MOBILE},
+    "data": {"name": "Data & AI", "keywords": KW_DATA},
+    "devops": {"name": "DevOps & Cloud", "keywords": KW_DEVOPS},
+    "testing": {"name": "Tesztelés", "keywords": KW_TEST},
+    "embedded": {"name": "Embedded", "keywords": KW_EMBED},
+    "security": {"name": "Biztonság", "keywords": KW_SECURITY},
+    "enterprise": {"name": "Enterprise", "keywords": KW_ENTERPRISE},
+    "general": {"name": "Általános IT", "keywords": KW_GENERAL_HU}
 }
 
 def clean_text(s: str) -> str:
@@ -402,54 +447,51 @@ def search_jobs():
         all_rows = []
         seen_links = set()
         
-        # Kulcsszavas keresés - minden kulcsszóhoz külön keresés
+        # Turbó kulcsszavas keresés - minden kulcsszóhoz külön keresés
         search_queries = []
         
-        # Alapvető IT kulcsszavak - minden releváns pozíció
-        base_keywords = [
-            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök", "alkalmazásfejlesztő",
-            "full stack", "frontend", "backend", "web fejlesztő", "mobil fejlesztő", "app fejlesztő",
-            "devops", "cloud engineer", "system administrator", "network engineer", "security engineer",
-            "data scientist", "data engineer", "machine learning", "ai engineer", "big data",
-            "qa engineer", "test engineer", "automation engineer", "performance engineer",
-            "database administrator", "dba", "sql developer", "bi developer", "analyst",
-            "project manager", "scrum master", "product owner", "business analyst",
-            "it consultant", "solution architect", "technical lead", "team lead"
-        ]
-        search_queries.extend([(f"Profession – {kw}", kw) for kw in base_keywords])
+        # Alap IT főfeed
+        search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
         
-        # Kiválasztott kategóriák kulcsszavai (duplikáció elkerülése)
-        existing_keywords = set(base_keywords)
-        for cat_id in selected_categories:
-            if cat_id in CATEGORIES:
-                keywords = CATEGORIES[cat_id]["keywords"]  # Összes kulcsszó
-                for keyword in keywords:
-                    if keyword.lower() not in existing_keywords:
-                        search_queries.append((f"Profession – {keyword}", keyword))
-                        existing_keywords.add(keyword.lower())
+        # Összes kulcsszó (maximalista lefedettség)
+        for keyword in sorted(set(ALL_KEYWORDS), key=str.lower):
+            search_queries.append((f"Profession – {keyword}", keyword))
         
         sess = requests.Session()
         
-        for name, keyword in search_queries:
+        per_source_kept = defaultdict(int)
+        per_source_skipped = defaultdict(int)
+        
+        for name, keyword_or_url in search_queries:
             try:
-                # Kulcsszavas keresés URL generálása
-                search_url = build_feed_url(keyword)
-                items = fetch_html_jobs(name, search_url)
-                print(f"DEBUG: {name} - {len(items)} állás")
+                # RSS URL generálása
+                if keyword_or_url.startswith("http"):
+                    # IT főfeed
+                    url = keyword_or_url
+                else:
+                    # Kulcsszavas keresés
+                    url = build_feed_url(keyword_or_url)
+                
+                items = fetch_rss_items(name, url)
+                print(f"🔎 {name} - {len(items)} állás")
+                
+                kept = 0
+                skipped = 0
                 
                 for it in items:
                     link = it["Link"]
                     if not link or link in seen_links:
+                        skipped += 1
                         continue
 
                     title = it["Pozíció"]
                     desc = it["Leírás"]
                     if not is_probably_dev(title, desc):
+                        skipped += 1
                         continue
 
-                    # HTML scraping-ből már van cég és lokáció
-                    company = it.get("Cég", "") or parse_company_from_summary(desc) or "N/A"
-                    location = it.get("Lokáció", "") or "N/A"
+                    # Cég kinyerése a leírásból
+                    company = parse_company_from_summary(desc) or "N/A"
                     
                     seen_links.add(link)
                     all_rows.append({
@@ -457,28 +499,42 @@ def search_jobs():
                         "forras": it["Forrás"],
                         "pozicio": title,
                         "ceg": company,
-                        "lokacio": location,
+                        "lokacio": "N/A",  # RSS-ben nincs lokáció
                         "link": link,
                         "publikalva": it["Publikálva"],
                         "lekeres_datuma": datetime.today().strftime("%Y-%m-%d"),
                         "leiras": (desc[:200] if isinstance(desc, str) else "")
                     })
+                    kept += 1
+
+                per_source_kept[name] = kept
+                per_source_skipped[name] = skipped
+                
+                # Kímélet a szerver felé
+                time.sleep(0.15)
 
             except Exception as e:
-                print(f"ERROR: {name} - {str(e)}")
+                print(f"⚠️ Kihagyva ({name}): {str(e)}")
                 continue
         
         # Globális változó frissítése
         global scraped_jobs
         scraped_jobs = all_rows
         
-        print(f"KERESÉS BEFEJEZVE: {len(all_rows)} állás találva, {len(search_queries)} kulcsszóval")
+        print(f"\n✅ {len(all_rows)} fejlesztői állás találva, {len(search_queries)} kulcsszóval")
+        
+        # Top források statisztikája
+        print("\n📊 Forrásösszegzés (megtartott / kihagyott):")
+        sorted_sources = sorted(per_source_kept.items(), key=lambda x: x[1], reverse=True)[:10]
+        for name, kept in sorted_sources:
+            print(f"  • {name}: {kept} / {per_source_skipped[name]}")
         
         return jsonify({
-            "message": "Keresés befejezve", 
+            "message": "Turbó keresés befejezve", 
             "total_jobs": len(all_rows),
             "total_searches": len(search_queries),
             "unique_links": len(seen_links),
+            "top_sources": dict(sorted_sources),
             "jobs": all_rows[:20]  # Első 20 állás
         })
         
