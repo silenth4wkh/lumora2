@@ -71,19 +71,20 @@ EXCLUDE_PHRASES = [
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 BASE = "https://www.profession.hu/allasok/1,0,0,{}?rss"
 
-# Kategóriák definiálása
+# Kategóriák definiálása - legnépszerűbb fejlesztői területek
 CATEGORIES = {
-    "programming_languages": {"name": "Programozási nyelvek", "keywords": KW_LANG},
-    "frontend": {"name": "Frontend fejlesztés", "keywords": KW_FE},
-    "backend": {"name": "Backend fejlesztés", "keywords": KW_BE},
-    "mobile": {"name": "Mobil fejlesztés", "keywords": KW_MOBILE},
-    "data": {"name": "Adatkezelés & AI", "keywords": KW_DATA},
-    "devops": {"name": "DevOps & Cloud", "keywords": KW_DEVOPS},
-    "testing": {"name": "Tesztelés", "keywords": KW_TEST},
-    "embedded": {"name": "Embedded", "keywords": KW_EMBED},
-    "security": {"name": "Biztonság", "keywords": KW_SECURITY},
-    "enterprise": {"name": "Enterprise", "keywords": KW_ENTERPRISE},
-    "general": {"name": "Általános IT", "keywords": KW_GENERAL_HU}
+    "java": {"name": "Java", "keywords": ["java", "spring", "spring boot", "maven", "gradle", "hibernate", "jpa", "microservices", "jakarta", "junit", "mockito"]},
+    "javascript": {"name": "JavaScript", "keywords": ["javascript", "js", "node.js", "nodejs", "express", "npm", "yarn", "webpack", "babel", "es6", "typescript", "ts"]},
+    "python": {"name": "Python", "keywords": ["python", "django", "flask", "fastapi", "pandas", "numpy", "tensorflow", "pytorch", "scikit-learn", "celery", "redis"]},
+    "php": {"name": "PHP", "keywords": ["php", "laravel", "symfony", "composer", "wordpress", "drupal", "magento", "codeigniter", "yii", "phalcon"]},
+    "react": {"name": "React", "keywords": ["react", "reactjs", "redux", "next.js", "nextjs", "gatsby", "jsx", "hooks", "context", "router"]},
+    "angular": {"name": "Angular", "keywords": ["angular", "angularjs", "rxjs", "ngrx", "typescript", "material", "cli", "universal", "ivy"]},
+    "vue": {"name": "Vue.js", "keywords": ["vue", "vuejs", "nuxt", "nuxtjs", "vuex", "pinia", "composition api", "vite", "quasar"]},
+    "devops": {"name": "DevOps", "keywords": ["devops", "docker", "kubernetes", "jenkins", "gitlab", "github actions", "terraform", "ansible", "aws", "azure", "gcp"]},
+    "dotnet": {"name": ".NET", "keywords": [".net", "dotnet", "c#", "csharp", "asp.net", "entity framework", "blazor", "xamarin", "maui", "core"]},
+    "mobile": {"name": "Mobile", "keywords": ["android", "ios", "flutter", "react native", "swift", "kotlin", "xamarin", "ionic", "cordova", "pwa"]},
+    "data": {"name": "Data & AI", "keywords": ["data scientist", "machine learning", "ai", "big data", "sql", "postgresql", "mysql", "mongodb", "elasticsearch", "kafka"]},
+    "testing": {"name": "Testing", "keywords": ["qa", "test automation", "selenium", "cypress", "jest", "junit", "pytest", "sdet", "performance testing", "api testing"]}
 }
 
 def clean_text(s: str) -> str:
