@@ -69,7 +69,7 @@ EXCLUDE_PHRASES = [
 ]
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-BASE = "https://www.profession.hu/allasok/1,0,0,{}?rss"
+BASE = "https://www.profession.hu/allasok/1,0,0,{}"
 
 # Portálok definiálása
 PORTALS = {
@@ -131,8 +131,76 @@ def is_probably_dev(title: str, desc: str) -> bool:
         return False
     return True
 
-def fetch_rss_items(source_name: str, url: str):
+def fetch_html_jobs(source_name: str, url: str):
+    """HTML scraping a Profession.hu álláslistákról"""
     r = requests.get(url, headers=HEADERS, timeout=25)
+    r.raise_for_status()
+    r.encoding = "utf-8"
+    
+    if not BeautifulSoup:
+        print("BeautifulSoup nincs telepítve, RSS fallback használata")
+        return fetch_rss_fallback(source_name, url)
+    
+    soup = BeautifulSoup(r.text, "html.parser")
+    items = []
+    
+    # Keresés ul.job-cards > li elemekben
+    job_cards = soup.select("ul.job-cards li")
+    if not job_cards:
+        # Fallback: más lehetséges szelektorok
+        job_cards = soup.select(".job-card, .job-item, .listing-item, .search-result-item")
+    
+    print(f"DEBUG: {source_name} - {len(job_cards)} job card találva")
+    
+    for card in job_cards:
+        try:
+            # Pozíció címe
+            title_elem = card.select_one("h3, .job-title, .position-title, .title, a[href*='/allas/']")
+            title = clean_text(title_elem.get_text()) if title_elem else ""
+            
+            # Link
+            link_elem = card.select_one("a[href*='/allas/']")
+            link = link_elem.get("href") if link_elem else ""
+            if link and not link.startswith("http"):
+                link = "https://www.profession.hu" + link
+            
+            # Cég neve
+            company_elem = card.select_one(".company, .employer, .company-name, .job-company")
+            company = clean_text(company_elem.get_text()) if company_elem else ""
+            
+            # Lokáció
+            location_elem = card.select_one(".location, .job-location, .city, .place")
+            location = clean_text(location_elem.get_text()) if location_elem else ""
+            
+            # Leírás
+            desc_elem = card.select_one(".description, .job-description, .summary, .excerpt")
+            desc = clean_text(desc_elem.get_text()) if desc_elem else ""
+            
+            # Dátum
+            date_elem = card.select_one(".date, .published, .job-date, .time")
+            pub_date = clean_text(date_elem.get_text()) if date_elem else ""
+            
+            if title and link:
+                items.append({
+                    "Forrás": source_name, 
+                    "Pozíció": title, 
+                    "Link": link, 
+                    "Leírás": desc,
+                    "Publikálva": pub_date,
+                    "Cég": company,
+                    "Lokáció": location
+                })
+                
+        except Exception as e:
+            print(f"ERROR parsing job card: {e}")
+            continue
+    
+    return items
+
+def fetch_rss_fallback(source_name: str, url: str):
+    """RSS fallback ha HTML scraping nem működik"""
+    rss_url = url + "?rss"
+    r = requests.get(rss_url, headers=HEADERS, timeout=25)
     r.raise_for_status()
     r.encoding = "utf-8"
     root = ET.fromstring(r.text)
@@ -142,7 +210,7 @@ def fetch_rss_items(source_name: str, url: str):
         link  = (it.findtext("link","") or "").strip()
         desc  = clean_text(it.findtext("description",""))
         pub   = (it.findtext("pubDate","") or "").strip()
-        items.append({"Forrás": source_name, "Pozíció": title, "Link": link, "Leírás": desc, "Publikálva": pub})
+        items.append({"Forrás": source_name, "Pozíció": title, "Link": link, "Leírás": desc, "Publikálva": pub, "Cég": "", "Lokáció": ""})
     return items
 
 def _json_loads_safe(s: str):
@@ -366,7 +434,7 @@ def search_jobs():
             try:
                 # Kulcsszavas keresés URL generálása
                 search_url = build_feed_url(keyword)
-                items = fetch_rss_items(name, search_url)
+                items = fetch_html_jobs(name, search_url)
                 print(f"DEBUG: {name} - {len(items)} állás")
                 
                 for it in items:
@@ -379,16 +447,17 @@ def search_jobs():
                     if not is_probably_dev(title, desc):
                         continue
 
-                    # Egyszerűsített enrichment (csak a leírásból)
-                    company = parse_company_from_summary(desc)
+                    # HTML scraping-ből már van cég és lokáció
+                    company = it.get("Cég", "") or parse_company_from_summary(desc) or "N/A"
+                    location = it.get("Lokáció", "") or "N/A"
                     
                     seen_links.add(link)
                     all_rows.append({
                         "id": len(all_rows) + 1,
                         "forras": it["Forrás"],
                         "pozicio": title,
-                        "ceg": company or "N/A",
-                        "lokacio": "N/A",  # Egyszerűsített verzió
+                        "ceg": company,
+                        "lokacio": location,
                         "link": link,
                         "publikalva": it["Publikálva"],
                         "lekeres_datuma": datetime.today().strftime("%Y-%m-%d"),
