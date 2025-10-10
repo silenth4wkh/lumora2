@@ -101,18 +101,18 @@ PORTALS = {
 
 # Kategóriák definiálása - legnépszerűbb fejlesztői területek
 CATEGORIES = {
-    "java": {"name": "Java", "keywords": ["java", "spring", "spring boot", "maven", "gradle", "hibernate", "jpa", "microservices", "jakarta", "junit", "mockito"]},
-    "javascript": {"name": "JavaScript", "keywords": ["javascript", "js", "node.js", "nodejs", "express", "npm", "yarn", "webpack", "babel", "es6", "typescript", "ts"]},
-    "python": {"name": "Python", "keywords": ["python", "django", "flask", "fastapi", "pandas", "numpy", "tensorflow", "pytorch", "scikit-learn", "celery", "redis"]},
-    "php": {"name": "PHP", "keywords": ["php", "laravel", "symfony", "composer", "wordpress", "drupal", "magento", "codeigniter", "yii", "phalcon"]},
-    "react": {"name": "React", "keywords": ["react", "reactjs", "redux", "next.js", "nextjs", "gatsby", "jsx", "hooks", "context", "router"]},
-    "angular": {"name": "Angular", "keywords": ["angular", "angularjs", "rxjs", "ngrx", "typescript", "material", "cli", "universal", "ivy"]},
-    "vue": {"name": "Vue.js", "keywords": ["vue", "vuejs", "nuxt", "nuxtjs", "vuex", "pinia", "composition api", "vite", "quasar"]},
-    "devops": {"name": "DevOps", "keywords": ["devops", "docker", "kubernetes", "jenkins", "gitlab", "github actions", "terraform", "ansible", "aws", "azure", "gcp"]},
-    "dotnet": {"name": ".NET", "keywords": [".net", "dotnet", "c#", "csharp", "asp.net", "entity framework", "blazor", "xamarin", "maui", "core"]},
-    "mobile": {"name": "Mobile", "keywords": ["android", "ios", "flutter", "react native", "swift", "kotlin", "xamarin", "ionic", "cordova", "pwa"]},
-    "data": {"name": "Data & AI", "keywords": ["data scientist", "machine learning", "ai", "big data", "sql", "postgresql", "mysql", "mongodb", "elasticsearch", "kafka"]},
-    "testing": {"name": "Testing", "keywords": ["qa", "test automation", "selenium", "cypress", "jest", "junit", "pytest", "sdet", "performance testing", "api testing"]}
+    "java": {"name": "Java", "keywords": ["java", "spring", "spring boot", "maven", "gradle", "hibernate", "jpa", "microservices", "jakarta", "junit", "mockito", "java developer", "java fejlesztő"]},
+    "javascript": {"name": "JavaScript", "keywords": ["javascript", "js", "node.js", "nodejs", "express", "npm", "yarn", "webpack", "babel", "es6", "typescript", "ts", "javascript developer", "js fejlesztő"]},
+    "python": {"name": "Python", "keywords": ["python", "django", "flask", "fastapi", "pandas", "numpy", "tensorflow", "pytorch", "scikit-learn", "celery", "redis", "python developer", "python fejlesztő"]},
+    "php": {"name": "PHP", "keywords": ["php", "laravel", "symfony", "composer", "wordpress", "drupal", "magento", "codeigniter", "yii", "phalcon", "php developer", "php fejlesztő"]},
+    "react": {"name": "React", "keywords": ["react", "reactjs", "redux", "next.js", "nextjs", "gatsby", "jsx", "hooks", "context", "router", "react developer", "react fejlesztő"]},
+    "angular": {"name": "Angular", "keywords": ["angular", "angularjs", "rxjs", "ngrx", "typescript", "material", "cli", "universal", "ivy", "angular developer", "angular fejlesztő"]},
+    "vue": {"name": "Vue.js", "keywords": ["vue", "vuejs", "nuxt", "nuxtjs", "vuex", "pinia", "composition api", "vite", "quasar", "vue developer", "vue fejlesztő"]},
+    "devops": {"name": "DevOps", "keywords": ["devops", "docker", "kubernetes", "jenkins", "gitlab", "github actions", "terraform", "ansible", "aws", "azure", "gcp", "devops engineer", "devops mérnök"]},
+    "dotnet": {"name": ".NET", "keywords": [".net", "dotnet", "c#", "csharp", "asp.net", "entity framework", "blazor", "xamarin", "maui", "core", ".net developer", ".net fejlesztő"]},
+    "mobile": {"name": "Mobile", "keywords": ["android", "ios", "flutter", "react native", "swift", "kotlin", "xamarin", "ionic", "cordova", "pwa", "mobile developer", "mobil fejlesztő"]},
+    "data": {"name": "Data & AI", "keywords": ["data scientist", "machine learning", "ai", "big data", "sql", "postgresql", "mysql", "mongodb", "elasticsearch", "kafka", "data engineer", "adat mérnök"]},
+    "testing": {"name": "Testing", "keywords": ["qa", "test automation", "selenium", "cypress", "jest", "junit", "pytest", "sdet", "performance testing", "api testing", "tesztelő", "tesztmérnök"]}
 }
 
 def clean_text(s: str) -> str:
@@ -334,18 +334,24 @@ def search_jobs():
         all_rows = []
         seen_links = set()
         
-        # Feed lista generálása
+        # Feed lista generálása - több IT főfeed a jobb lefedettségért
         feed_list = [
             ("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"),
             ("Profession – Fejlesztő", "https://www.profession.hu/allasok/1,0,0,fejlesztő?rss"),
             ("Profession – Programozó", "https://www.profession.hu/allasok/1,0,0,programozó?rss"),
-            ("Profession – Szoftver", "https://www.profession.hu/allasok/1,0,0,szoftver?rss")
+            ("Profession – Szoftver", "https://www.profession.hu/allasok/1,0,0,szoftver?rss"),
+            ("Profession – Szoftvermérnök", "https://www.profession.hu/allasok/1,0,0,szoftvermérnök?rss"),
+            ("Profession – Rendszermérnök", "https://www.profession.hu/allasok/1,0,0,rendszermérnök?rss"),
+            ("Profession – Alkalmazásfejlesztő", "https://www.profession.hu/allasok/1,0,0,alkalmazásfejlesztő?rss"),
+            ("Profession – Full Stack", "https://www.profession.hu/allasok/1,0,0,full%20stack?rss"),
+            ("Profession – Frontend", "https://www.profession.hu/allasok/1,0,0,frontend?rss"),
+            ("Profession – Backend", "https://www.profession.hu/allasok/1,0,0,backend?rss")
         ]
         
-        # Csak a legfontosabb kulcsszavakhoz generálunk feedet
+        # Több kulcsszó használata a jobb lefedettségért
         for cat_id in selected_categories:
             if cat_id in CATEGORIES:
-                keywords = CATEGORIES[cat_id]["keywords"][:2]  # Csak az első 2 kulcsszó
+                keywords = CATEGORIES[cat_id]["keywords"][:8]  # Az első 8 kulcsszó
                 for keyword in keywords:
                     feed_list.append((f"Profession – {keyword}", build_feed_url(keyword)))
         
