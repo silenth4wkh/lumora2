@@ -349,6 +349,97 @@ def fetch_job_meta(url: str, session: requests.Session = None, retries: int = 2,
             time.sleep(pause)
     return (None, None)
 
+def _json_loads_safe(s: str):
+    try:
+        return json.loads(s)
+    except Exception:
+        return None
+
+def extract_company_location_from_html(html: str):
+    """
+    Próbálkozási sorrend:
+      1) JSON-LD (JobPosting)
+      2) dataLayer (items[].affiliation / items[].location)
+      3) DOM szöveg-fallback („Hirdető cég: …", tipikus location elemek)
+    """
+    company = None
+    location = None
+
+    # 1) JSON-LD
+    if BeautifulSoup:
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in soup.select("script[type='application/ld+json']"):
+            j = _json_loads_safe(tag.string or "")
+            if not j:
+                continue
+            objs = j if isinstance(j, list) else [j]
+            for obj in objs:
+                if not isinstance(obj, dict):
+                    continue
+                if obj.get("@type") == "JobPosting":
+                    org = obj.get("hiringOrganization") or {}
+                    if isinstance(org, dict) and (org.get("name")):
+                        company = company or org.get("name")
+                    jl = obj.get("jobLocation")
+                    jl_list = jl if isinstance(jl, list) else [jl] if isinstance(jl, dict) else []
+                    for loc in jl_list:
+                        addr = (loc or {}).get("address") or {}
+                        parts = [addr.get("addressLocality"), addr.get("addressRegion")]
+                        loc_str = ", ".join([p for p in parts if p])
+                        if loc_str:
+                            location = location or loc_str
+
+    # 2) dataLayer (gyors/egyszerű regexekkel)
+    if not (company and location):
+        # próbáljuk kifogni az items[]-et
+        # pl.: "items":[{"affiliation":"4iG Nyrt.","location":"Pest_megye,_Budapest"}]
+        m_items = re.search(r'"items"\s*:\s*(\[[^\]]+\])', html, re.IGNORECASE | re.DOTALL)
+        if m_items:
+            raw = m_items.group(1)
+            # próbáljuk JSON kompatibilissé tenni (előfordulhat aposztróf): durva fallback
+            raw_json = raw.replace("'", '"')
+            arr = _json_loads_safe(raw_json)
+            if isinstance(arr, list):
+                for it in arr:
+                    if not isinstance(it, dict):
+                        continue
+                    company = company or it.get("affiliation") or it.get("brand") or it.get("seller") or it.get("company")
+                    location = location or it.get("location") or it.get("city") or it.get("region")
+
+    # 3) DOM szöveg-fallbackok (regex)
+    if not company:
+        m = re.search(r"Hirdető\s*cég\s*:\s*([^,<>\n]+)", html, flags=re.IGNORECASE)
+        if m:
+            company = m.group(1).strip()
+
+    if not location:
+        # keressünk tipikus magyar város/megye mintákat az oldal fő tartalmában
+        mloc = re.search(r"(Budapest(?:\s*[IVXLC]+\.?\s*kerület)?|Debrecen|Szeged|Győr|Pécs|Miskolc|Kecskemét|Székesfehérvár|Nyíregyháza|Eger|Veszprém|Szombathely|Sopron|Tatabánya|Pápa|Érd|Budaörs|Pest megye|Bács-Kiskun megye|Fejér megye|Győr-Moson-Sopron megye)", html, flags=re.IGNORECASE)
+        if mloc:
+            location = mloc.group(1).strip()
+
+    # utóformázás
+    if isinstance(location, str):
+        location = location.replace("_", " ").replace("megye", "megye").strip(", ")
+
+    return company, location
+
+def fetch_job_meta(url: str, session: requests.Session = None, retries: int = 2, pause: float = 0.25):
+    sess = session or requests.Session()
+    last_err = None
+    for _ in range(retries + 1):
+        try:
+            r = sess.get(url, headers=HEADERS, timeout=25)
+            r.raise_for_status()
+            r.encoding = "utf-8"
+            company, location = extract_company_location_from_html(r.text)
+            return (company, location)
+        except Exception as e:
+            last_err = e
+            time.sleep(pause)
+    # ha nem sikerült, térjünk vissza None-okkal
+    return (None, None)
+
 def parse_company_from_summary(summary: str):
     if not isinstance(summary, str):
         return None
@@ -468,30 +559,22 @@ def search_jobs():
         # Alap IT főfeed
         search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
         
-        # Csak a legfontosabb kulcsszavak (optimalizált lefedettség)
-        priority_keywords = [
-            # Legfontosabb nyelvek
-            "java", "python", "c#", ".net", "javascript", "typescript", "php", "go", "rust",
-            # Legfontosabb frameworkök
-            "react", "angular", "vue", "spring", "django", "laravel", "node.js", "express",
-            # Legfontosabb területek
-            "frontend", "backend", "full stack", "devops", "data scientist", "machine learning",
-            "mobile", "android", "ios", "flutter", "react native",
-            # Magyar kulcsszavak
-            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök"
-        ]
-        
-        for keyword in priority_keywords:
-            if keyword in ALL_KEYWORDS:
-                search_queries.append((f"Profession – {keyword}", keyword))
+        # Összes kulcsszó (maximalista lefedettség)
+        for keyword in sorted(set(ALL_KEYWORDS), key=str.lower):
+            search_queries.append((f"Profession – {keyword}", keyword))
         
         sess = requests.Session()
         
         per_source_kept = defaultdict(int)
         per_source_skipped = defaultdict(int)
         
-        for name, keyword_or_url in search_queries:
+        total_queries = len(search_queries)
+        for i, (name, keyword_or_url) in enumerate(search_queries):
             try:
+                # Progress tracking
+                progress = (i / total_queries) * 100
+                print(f"📊 Progress: {progress:.1f}% - {name}")
+                
                 # RSS URL generálása
                 if keyword_or_url.startswith("http"):
                     # IT főfeed
@@ -517,34 +600,25 @@ def search_jobs():
                         skipped += 1
                         continue
 
-                    # Link javítása ha szükséges
-                    if link and not link.startswith("http"):
-                        if link.startswith("/"):
-                            link = "https://www.profession.hu" + link
-                        else:
-                            link = "https://www.profession.hu/" + link
-                    
-                    # Link ellenőrzése
-                    if not link or "profession.hu" not in link:
-                        skipped += 1
-                        continue
-
                     title = it["Pozíció"]
                     desc = it["Leírás"]
                     if not is_probably_dev(title, desc):
                         skipped += 1
                         continue
 
-                    # Cég kinyerése a leírásból
-                    company = parse_company_from_summary(desc) or "N/A"
-                    
+                    # Enrichment: cég + lokáció részoldalról
+                    company, location = fetch_job_meta(link, session=sess, retries=2, pause=0.35)
+                    # Fallback: cég a leírásból, ha ott maradt
+                    if not company:
+                        company = parse_company_from_summary(desc)
+
                     seen_links.add(link)
                     all_rows.append({
                         "id": len(all_rows) + 1,
                         "forras": it["Forrás"],
                         "pozicio": title,
-                        "ceg": company,
-                        "lokacio": "N/A",  # RSS-ben nincs lokáció
+                        "ceg": company or "N/A",
+                        "lokacio": location or "N/A",
                         "link": link,
                         "publikalva": it["Publikálva"],
                         "lekeres_datuma": datetime.today().strftime("%Y-%m-%d"),
@@ -552,10 +626,13 @@ def search_jobs():
                     })
                     kept += 1
 
+                    # Kímélet a szerver felé
+                    time.sleep(0.15)
+
                 per_source_kept[name] = kept
                 per_source_skipped[name] = skipped
                 
-                # Kímélet a szerver felé
+                # Kímélet a szerver felé (feedek között)
                 time.sleep(0.15)
 
             except Exception as e:
