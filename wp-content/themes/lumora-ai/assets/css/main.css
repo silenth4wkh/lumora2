@@ -1,0 +1,14 @@
+/* Base */
+:root{ color-scheme: dark; }
+body{ background:#0B0B0B; color:#EDEDED; }
+
+/* Utilities */
+.lift{ transition: transform .3s ease, box-shadow .3s ease; }
+.grid-3{ display:grid; grid-template-columns: 1fr; gap:1.25rem; }
+@media (min-width: 800px){ .grid-3{ grid-template-columns: repeat(3,1fr); } }
+
+/* Animations */
+[data-io]{ opacity:.001; transform: translateY(8px); transition: opacity .5s ease, transform .5s ease; }
+.in{ opacity:1; transform:none; }
+
+

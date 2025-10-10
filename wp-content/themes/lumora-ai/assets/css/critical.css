@@ -1,0 +1,30 @@
+:root{
+  --brand: #FFE200;
+  --bg: #0B0B0B;
+  --fg: #EDEDED;
+  --card: #111111;
+  --radius: 14px;
+  --shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+
+/* Above-the-fold: hero basics */
+.alignfull.hero-bg{
+  background:
+    radial-gradient(1200px 600px at 80% -20%, rgba(255,226,0,.12), transparent),
+    var(--bg);
+}
+
+.has-brand-background-color{ background-color: var(--brand) !important; }
+.has-bg-color{ color: var(--bg) !important; }
+.has-fg-color{ color: var(--fg) !important; }
+
+.card{
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+@media (prefers-reduced-motion: no-preference){
+  .lift:hover{ transform: translateY(-4px); transition: transform .3s ease; }
+}
+

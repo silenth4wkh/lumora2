@@ -1,0 +1,412 @@
+{
+  "name": "HU IT Jobs Scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 30 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Daily Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 480]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "profession.hu",
+              "value": "https://profession.hu/allasok/it"
+            },
+            {
+              "name": "nofluffjobs.com",
+              "value": "https://nofluffjobs.com/hu"
+            },
+            {
+              "name": "cvonline.hu",
+              "value": "https://cvonline.hu/allasok/it"
+            },
+            {
+              "name": "jobline.hu",
+              "value": "https://jobline.hu/allasok/it"
+            },
+            {
+              "name": "worki.hu",
+              "value": "https://worki.hu/allasok/it"
+            }
+          ]
+        }
+      },
+      "id": "sources-set",
+      "name": "Job Sources",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.value }}",
+        "options": {
+          "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          }
+        }
+      },
+      "id": "http-request",
+      "name": "HTTP Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "extractionValues": {
+          "values": [
+            {
+              "key": "job_title_raw",
+              "cssSelector": "h2.job-title, .job-title, h3 a, .position-title"
+            },
+            {
+              "key": "company_name",
+              "cssSelector": ".company-name, .employer, .company"
+            },
+            {
+              "key": "location_city",
+              "cssSelector": ".location, .city, .place"
+            },
+            {
+              "key": "description_raw",
+              "cssSelector": ".description, .job-description, .content"
+            },
+            {
+              "key": "salary_raw",
+              "cssSelector": ".salary, .wage, .compensation"
+            },
+            {
+              "key": "apply_url",
+              "cssSelector": "a[href*='apply'], a[href*='jelentkez'], .apply-link"
+            }
+          ]
+        }
+      },
+      "id": "html-extract",
+      "name": "HTML Extract",
+      "type": "n8n-nodes-base.htmlExtract",
+      "typeVersion": 1,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "source",
+              "value": "={{ $('Job Sources').item.json.name }}"
+            },
+            {
+              "name": "source_url",
+              "value": "={{ $('Job Sources').item.json.value }}"
+            },
+            {
+              "name": "scraped_at",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "id": "source-meta-set",
+      "name": "Add Source Meta",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Python Code node - Raw to Structured\nimport re, hashlib, html, datetime as dt\n\n# Input data from HTML extract\nitems = $input.all()\nstructured_items = []\n\nfor item in items:\n    # Extract basic fields\n    job_title_raw = item.json.get('job_title_raw', '')\n    company_name = item.json.get('company_name', '')\n    location_city = item.json.get('location_city', '')\n    description_raw = item.json.get('description_raw', '')\n    salary_raw = item.json.get('salary_raw', '')\n    apply_url = item.json.get('apply_url', '')\n    \n    # Create structured record\n    structured_item = {\n        'job_title_raw': job_title_raw,\n        'job_title_norm': job_title_raw.strip(),\n        'company_name': company_name,\n        'location_city': location_city,\n        'location_country': 'HU',\n        'description_raw': description_raw,\n        'salary_raw': salary_raw,\n        'employment_type': 'full-time',\n        'posted_at': dt.datetime.now().isoformat(),\n        'valid_until': '',\n        'apply_url': apply_url,\n        'benefits_raw': '',\n        'source': item.json.get('source', ''),\n        'source_url': item.json.get('source_url', ''),\n        'scraped_at': item.json.get('scraped_at', '')\n    }\n    \n    structured_items.append(structured_item)\n\nreturn structured_items"
+      },
+      "id": "python-raw-to-structured",
+      "name": "Raw to Structured",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Python Code node - Normalization and Categorization\nimport re, hashlib, html, datetime as dt\n\n# Role categorization mapping\nROLE_MAP = {\n    'DevOps': [r'\\bdev[-\\s]?ops\\b', r'kubernetes', r'terraform', r'ci/?cd'],\n    'Backend': [r'\\bbackend\\b', r'\\b(java|kotlin|c#|\\.net|python|go|php|node)\\b'],\n    'Frontend': [r'\\bfront[-\\s]?end\\b', r'(react|angular|vue|typescript)'],\n    'Full-stack': [r'\\bfull[-\\s]?stack\\b'],\n    'Data/ML': [r'\\b(data\\s(engineer|scientist)|machine\\slearning|ml|spark|hadoop)\\b'],\n    'QA/Testing': [r'\\bqa|test(er|ing)|cypress|selenium|playwright\\b'],\n    'Mobile': [r'\\b(android|ios|flutter|react\\s?native)\\b'],\n    'Security': [r'\\b(security|secops|soc|siem)\\b'],\n    'Cloud': [r'\\b(aws|azure|gcp)\\b'],\n    'UI/UX': [r'\\b(ui|ux|product\\sdesigner)\\b'],\n    'PM/PO': [r'\\b(product\\smanager|project\\smanager|product\\sowner)\\b'],\n    'BA': [r'\\b(business\\sanalyst|business\\sanalyst)\\b'],\n    'SysAdmin/IT Ops': [r'\\b(sysadmin|system\\sadmin|it\\sops)\\b'],\n    'Embedded': [r'\\b(embedded|c\\+\\+|microcontroller)\\b'],\n    'Game': [r'\\b(game\\sdeveloper|unity|unreal)\\b'],\n    'ERP/CRM': [r'\\b(erp|crm|sap|salesforce)\\b'],\n    'Support': [r'\\b(support|helpdesk|technical\\ssupport)\\b'],\n    'Network': [r'\\b(network|cisco|routing|switching)\\b'],\n    'DBA': [r'\\b(database\\sadmin|dba|sql\\sserver|oracle)\\b']\n}\n\n# Stack keywords\nMUST_STACK = ['java','python','go','c#','.net','php','node','react','angular','vue','typescript','kubernetes','docker','aws','azure','gcp','terraform','ansible','kafka','spark','sql','nosql','linux','git','ci/cd']\n\n# Helper functions\ndef seniority_of(text):\n    t = text.lower()\n    if re.search(r'\\b(junior|kezd[őo]|pályakezd[őo])\\b', t): return 'junior'\n    if re.search(r'\\b(medior|középhalad[óo]|3-5\\s*év)\\b', t): return 'medior'\n    if re.search(r'\\b(senior|tapasztalt|5\\+?\\s*év)\\b', t): return 'senior'\n    if re.search(r'\\b(lead|principal|architect|vezet[őo])\\b', t): return 'lead'\n    return 'unspecified'\n\ndef work_model_of(text):\n    t = text.lower()\n    if re.search(r'\\b(remote|táv|home\\s*office)\\b', t): return 'remote'\n    if re.search(r'\\b(hibrid|hybrid)\\b', t): return 'hybrid'\n    return 'on-site'\n\ndef salary_parse(text):\n    t = text.replace('.', '').replace(' ', '')\n    m = re.search(r'(\\d{4,6})(?:-(\\d{4,6}))?\\s*(huf|ft|eur)', t, re.I)\n    if not m: return (None, None, None, 'unknown')\n    ccy = m.group(3).upper().replace('FT','HUF')\n    mn = int(m.group(1)); mx = int(m.group(2) or m.group(1))\n    grossnet = 'gross' if re.search(r'\\b(brutt[óo]|gross)\\b', text, re.I) else ('net' if re.search(r'\\b(nett[óo]|net)\\b', text, re.I) else 'unknown')\n    return (mn, mx, ccy, grossnet)\n\ndef role_of(text):\n    t = text.lower()\n    for role, pats in ROLE_MAP.items():\n        if any(re.search(p, t) for p in pats): return role\n    return 'Other'\n\ndef extract_stack(text):\n    t = text.lower()\n    hits = [kw for kw in MUST_STACK if kw in t]\n    return sorted(set(hits))\n\n# Process items\nitems = $input.all()\nnormalized_items = []\n\nfor item in items:\n    # Get text for analysis\n    title_text = item.json.get('job_title_raw', '') + ' ' + item.json.get('description_raw', '')\n    \n    # Normalize job title\n    job_title_norm = item.json.get('job_title_raw', '').strip()\n    \n    # Categorize role\n    role_category = role_of(title_text)\n    \n    # Determine seniority\n    seniority = seniority_of(title_text)\n    \n    # Determine work model\n    work_model = work_model_of(title_text)\n    \n    # Parse salary\n    salary_min, salary_max, salary_currency, salary_gross_net = salary_parse(item.json.get('salary_raw', ''))\n    \n    # Extract tech stack\n    must_have_stack = extract_stack(title_text)\n    nice_to_have_stack = []  # Could be enhanced with more sophisticated parsing\n    \n    # Determine languages\n    languages = []\n    if re.search(r'\\b(angol|english|angliai)\\b', title_text, re.I): languages.append('EN')\n    if re.search(r'\\b(német|german|deutsch)\\b', title_text, re.I): languages.append('DE')\n    if re.search(r'\\b(magyar|hungarian)\\b', title_text, re.I): languages.append('HU')\n    \n    # Create description excerpt\n    description_excerpt = html.unescape(item.json.get('description_raw', ''))\n    description_excerpt = re.sub(r'<[^>]+>', '', description_excerpt)\n    description_excerpt = description_excerpt.strip()[:300]\n    \n    # Create normalized item\n    normalized_item = {\n        **item.json,\n        'job_title_norm': job_title_norm,\n        'role_category': role_category,\n        'seniority': seniority,\n        'work_model': work_model,\n        'salary_min': salary_min,\n        'salary_max': salary_max,\n        'salary_currency': salary_currency,\n        'salary_gross_net': salary_gross_net,\n        'must_have_stack': ', '.join(must_have_stack),\n        'nice_to_have_stack': ', '.join(nice_to_have_stack),\n        'languages': ', '.join(languages),\n        'description_excerpt': description_excerpt,\n        'employment_type': 'full-time',\n        'contract_type': 'állandó',\n        'company_type': 'vállalat',\n        'benefits_parsed': ''\n    }\n    \n    normalized_items.append(normalized_item)\n\nreturn normalized_items"
+      },
+      "id": "python-normalize-categorize",
+      "name": "Normalize & Categorize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Python Code node - Generate Hash ID\nimport hashlib\n\n# Helper function\ndef hash_id(company, title_norm, city, role):\n    key = f\"{(company or '').lower()}|{(title_norm or '').lower()}|{(city or '').lower()}|{(role or '').lower()}\"\n    return hashlib.sha256(key.encode('utf-8')).hexdigest()\n\n# Process items\nitems = $input.all()\nhashed_items = []\n\nfor item in items:\n    # Generate hash ID\n    hash_id_value = hash_id(\n        item.json.get('company_name', ''),\n        item.json.get('job_title_norm', ''),\n        item.json.get('location_city', ''),\n        item.json.get('role_category', '')\n    )\n    \n    # Add hash_id to item\n    hashed_item = {\n        **item.json,\n        'hash_id': hash_id_value\n    }\n    \n    hashed_items.append(hashed_item)\n\nreturn hashed_items"
+      },
+      "id": "python-generate-hash",
+      "name": "Generate Hash ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "filePath": "/data/it_jobs_master.xlsx",
+        "options": {
+          "sheetName": "master"
+        }
+      },
+      "id": "read-master-excel",
+      "name": "Read Master Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Python Code node - Diff against Master\n# inputs[0] = scraped items; inputs[1] = master rows\nscraped_items = $input.all()\nmaster_items = $('Read Master Excel').all()\n\n# Create lookup for existing items\nexisting = {row.json.get('hash_id'): row.json for row in master_items}\n\nout_new = []\nout_updated = []\n\nfor item in scraped_items:\n    hid = item.json.get('hash_id')\n    if hid not in existing:\n        out_new.append(item.json)\n    else:\n        # Check if key fields changed\n        changed = any(\n            item.json.get(k) != existing[hid].get(k) \n            for k in ('salary_min', 'salary_max', 'posted_at', 'description_excerpt')\n        )\n        if changed:\n            updated_item = {\n                **item.json,\n                'updated': True\n            }\n            out_updated.append(updated_item)\n\nreturn {\n    'new': out_new,\n    'updated': out_updated,\n    'total_new': len(out_new),\n    'total_updated': len(out_updated)\n}"
+      },
+      "id": "python-diff-master",
+      "name": "Diff against Master",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "filePath": "/data/it_jobs_master.xlsx",
+        "options": {
+          "sheetName": "master",
+          "operation": "upsert",
+          "upsertKey": "hash_id"
+        }
+      },
+      "id": "upsert-master-excel",
+      "name": "Upsert Master Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [2220, 200]
+    },
+    {
+      "parameters": {
+        "filePath": "/data/it_jobs_daily_{{ $now.format('YYYY-MM-DD') }}.xlsx",
+        "options": {
+          "sheetName": "daily_{{ $now.format('YYYY-MM-DD') }}",
+          "operation": "append"
+        }
+      },
+      "id": "append-daily-excel",
+      "name": "Append Daily Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [2220, 400]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourcompany.com",
+        "toEmail": "admin@yourcompany.com",
+        "subject": "IT állások – napi összesítő {{ $now.format('YYYY-MM-DD') }}",
+        "message": "Napi összesítő:\n\nÚj állások: {{ $('Diff against Master').item.json.total_new }}\nMódosult állások: {{ $('Diff against Master').item.json.total_updated }}\n\nForrások:\n- profession.hu\n- nofluffjobs.com\n- cvonline.hu\n- jobline.hu\n- worki.hu\n\nCsatolmány: napi Excel fájl",
+        "attachments": [
+          {
+            "name": "daily_jobs_{{ $now.format('YYYY-MM-DD') }}.xlsx",
+            "data": "={{ $binary.data }}"
+          }
+        ]
+      },
+      "id": "send-email-report",
+      "name": "Send Email Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "webhookUrl": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "message": "❌ IT Jobs Scraper Error: {{ $json.error.message }}",
+        "options": {}
+      },
+      "id": "error-slack-webhook",
+      "name": "Error Slack Webhook",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [2440, 500]
+    }
+  ],
+  "connections": {
+    "Daily Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Job Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Job Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job Sources": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTML Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML Extract": {
+      "main": [
+        [
+          {
+            "node": "Add Source Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Source Meta": {
+      "main": [
+        [
+          {
+            "node": "Raw to Structured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Raw to Structured": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Categorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Categorize": {
+      "main": [
+        [
+          {
+            "node": "Generate Hash ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Hash ID": {
+      "main": [
+        [
+          {
+            "node": "Diff against Master",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Master Excel": {
+      "main": [
+        [
+          {
+            "node": "Diff against Master",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Diff against Master": {
+      "main": [
+        [
+          {
+            "node": "Upsert Master Excel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Append Daily Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Master Excel": {
+      "main": [
+        [
+          {
+            "node": "Send Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Daily Excel": {
+      "main": [
+        [
+          {
+            "node": "Send Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 2,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

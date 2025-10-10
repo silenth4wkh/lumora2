@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IT Álláskereső - Profession.hu Scraper</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .category-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .category-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .category-card.selected {
+            background-color: #0d6efd;
+            color: white;
+        }
+        .job-card {
+            border-left: 4px solid #0d6efd;
+            transition: all 0.3s ease;
+        }
+        .job-card:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .progress-container {
+            display: none;
+        }
+        .results-container {
+            display: none;
+        }
+        .loading-spinner {
+            display: none;
+        }
+        .keyword-badge {
+            font-size: 0.75rem;
+            margin: 2px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-search me-2"></i>IT Álláskereső
+            </span>
+            <span class="text-light">Profession.hu Scraper</span>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Keresési panel -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-filter me-2"></i>Kategóriák kiválasztása
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="categories-container">
+                            <!-- Kategóriák dinamikusan betöltve -->
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-primary btn-lg" id="search-btn" disabled>
+                                <i class="fas fa-search me-2"></i>Állások keresése
+                            </button>
+                            <button class="btn btn-outline-secondary ms-2" id="clear-btn">
+                                <i class="fas fa-times me-2"></i>Törlés
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="row mt-4 progress-container" id="progress-container">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            <i class="fas fa-spinner fa-spin me-2"></i>Keresés folyamatban...
+                        </h6>
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%" id="progress-bar"></div>
+                        </div>
+                        <small class="text-muted" id="progress-status">Inicializálás...</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Eredmények -->
+        <div class="row mt-4 results-container" id="results-container">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-briefcase me-2"></i>Találatok
+                        </h5>
+                        <div>
+                            <span class="badge bg-primary me-2" id="results-count">0 állás</span>
+                            <button class="btn btn-sm btn-outline-primary" id="export-csv">
+                                <i class="fas fa-download me-1"></i>CSV export
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Szűrők -->
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control" id="search-filter" placeholder="Pozíció vagy cég keresése...">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="location-filter">
+                                    <option value="">Minden lokáció</option>
+                                    <option value="Budapest">Budapest</option>
+                                    <option value="Debrecen">Debrecen</option>
+                                    <option value="Szeged">Szeged</option>
+                                    <option value="Győr">Győr</option>
+                                    <option value="Pécs">Pécs</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" id="sort-filter">
+                                    <option value="date">Publikálás dátuma</option>
+                                    <option value="company">Cég neve</option>
+                                    <option value="position">Pozíció neve</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-outline-secondary w-100" id="clear-filters">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Eredmények listája -->
+                        <div id="jobs-list">
+                            <!-- Állások dinamikusan betöltve -->
+                        </div>
+
+                        <!-- Pagináció -->
+                        <nav aria-label="Eredmények lapozása" class="mt-4">
+                            <ul class="pagination justify-content-center" id="pagination">
+                                <!-- Pagináció dinamikusan generálva -->
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading spinner -->
+        <div class="text-center loading-spinner" id="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Betöltés...</span>
+            </div>
+            <p class="mt-2">Állások keresése...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let categories = {};
+        let selectedCategories = [];
+        let allJobs = [];
+        let filteredJobs = [];
+        let currentPage = 1;
+        const jobsPerPage = 10;
+
+        // Kategóriák betöltése
+        async function loadCategories() {
+            try {
+                const response = await fetch('/api/categories');
+                categories = await response.json();
+                renderCategories();
+            } catch (error) {
+                console.error('Hiba a kategóriák betöltésekor:', error);
+            }
+        }
+
+        // Kategóriák megjelenítése
+        function renderCategories() {
+            const container = document.getElementById('categories-container');
+            container.innerHTML = '';
+
+            Object.entries(categories).forEach(([id, category]) => {
+                const card = document.createElement('div');
+                card.className = 'col-md-4 col-lg-3 mb-3';
+                card.innerHTML = `
+                    <div class="card category-card h-100" data-category="${id}">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">${category.name}</h6>
+                            <small class="text-muted">${category.keywords.length} kulcsszó</small>
+                        </div>
+                    </div>
+                `;
+                card.addEventListener('click', () => toggleCategory(id));
+                container.appendChild(card);
+            });
+        }
+
+        // Kategória kiválasztása/eltávolítása
+        function toggleCategory(categoryId) {
+            const card = document.querySelector(`[data-category="${categoryId}"]`);
+            
+            if (selectedCategories.includes(categoryId)) {
+                selectedCategories = selectedCategories.filter(id => id !== categoryId);
+                card.classList.remove('selected');
+            } else {
+                selectedCategories.push(categoryId);
+                card.classList.add('selected');
+            }
+
+            // Keresés gomb engedélyezése
+            document.getElementById('search-btn').disabled = selectedCategories.length === 0;
+        }
+
+        // Keresés indítása
+        async function startSearch() {
+            if (selectedCategories.length === 0) return;
+
+            // UI frissítése
+            document.getElementById('progress-container').style.display = 'block';
+            document.getElementById('results-container').style.display = 'none';
+            document.getElementById('loading-spinner').style.display = 'block';
+            document.getElementById('search-btn').disabled = true;
+
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        categories: selectedCategories
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.error) {
+                    alert(result.error);
+                    return;
+                }
+
+                // Progress követése (egyszerűsített)
+                simulateProgress();
+                
+            } catch (error) {
+                console.error('Hiba a keresés során:', error);
+                alert('Hiba történt a keresés során!');
+            }
+        }
+
+        // Progress szimuláció (valós implementációban WebSocket vagy polling)
+        function simulateProgress() {
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += Math.random() * 10;
+                if (progress > 90) progress = 90;
+                
+                document.getElementById('progress-bar').style.width = progress + '%';
+                document.getElementById('progress-status').textContent = 
+                    `Feldolgozás... ${Math.round(progress)}%`;
+
+                if (progress >= 90) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        completeSearch();
+                    }, 2000);
+                }
+            }, 500);
+        }
+
+        // Keresés befejezése
+        function completeSearch() {
+            // Mock adatok (valós implementációban API-ból jönne)
+            allJobs = generateMockJobs();
+            filteredJobs = [...allJobs];
+            
+            document.getElementById('progress-container').style.display = 'none';
+            document.getElementById('loading-spinner').style.display = 'none';
+            document.getElementById('results-container').style.display = 'block';
+            document.getElementById('search-btn').disabled = false;
+            
+            renderJobs();
+            updateResultsCount();
+        }
+
+        // Mock adatok generálása (teszteléshez)
+        function generateMockJobs() {
+            const positions = [
+                'Senior Python Developer', 'React Frontend Developer', 'DevOps Engineer',
+                'Java Backend Developer', 'Data Scientist', 'Mobile App Developer',
+                'Full Stack Developer', 'Cloud Architect', 'QA Automation Engineer'
+            ];
+            const companies = [
+                '4iG Nyrt.', 'OTP Bank', 'SAP Hungary', 'Microsoft Hungary',
+                'IBM Hungary', 'Accenture', 'EPAM Systems', 'Morgan Stanley'
+            ];
+            const locations = [
+                'Budapest', 'Debrecen', 'Szeged', 'Győr', 'Pécs', 'Miskolc'
+            ];
+
+            return Array.from({length: 25}, (_, i) => ({
+                id: i + 1,
+                forras: 'Profession.hu',
+                pozicio: positions[Math.floor(Math.random() * positions.length)],
+                ceg: companies[Math.floor(Math.random() * companies.length)],
+                lokacio: locations[Math.floor(Math.random() * locations.length)],
+                link: `https://profession.hu/allas/${i + 1}`,
+                publikalva: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                lekeres_datuma: new Date().toISOString().split('T')[0],
+                leiras: 'Részletes állásleírás itt található...'
+            }));
+        }
+
+        // Állások megjelenítése
+        function renderJobs() {
+            const container = document.getElementById('jobs-list');
+            const startIndex = (currentPage - 1) * jobsPerPage;
+            const endIndex = startIndex + jobsPerPage;
+            const jobsToShow = filteredJobs.slice(startIndex, endIndex);
+
+            container.innerHTML = '';
+
+            if (jobsToShow.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                        <h5>Nincs találat</h5>
+                        <p class="text-muted">Próbálj meg más szűrőket használni</p>
+                    </div>
+                `;
+                return;
+            }
+
+            jobsToShow.forEach(job => {
+                const jobCard = document.createElement('div');
+                jobCard.className = 'card job-card mb-3';
+                jobCard.innerHTML = `
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h6 class="card-title mb-1">
+                                    <a href="${job.link}" target="_blank" class="text-decoration-none">
+                                        ${job.pozicio}
+                                    </a>
+                                </h6>
+                                <p class="text-muted mb-2">
+                                    <i class="fas fa-building me-1"></i>${job.ceg}
+                                    <span class="ms-3">
+                                        <i class="fas fa-map-marker-alt me-1"></i>${job.lokacio}
+                                    </span>
+                                </p>
+                                <p class="card-text small text-muted">${job.leiras}</p>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar me-1"></i>
+                                    ${new Date(job.publikalva).toLocaleDateString('hu-HU')}
+                                </small>
+                                <div class="mt-2">
+                                    <a href="${job.link}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-external-link-alt me-1"></i>Megtekintés
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(jobCard);
+            });
+
+            renderPagination();
+        }
+
+        // Pagináció
+        function renderPagination() {
+            const totalPages = Math.ceil(filteredJobs.length / jobsPerPage);
+            const container = document.getElementById('pagination');
+            container.innerHTML = '';
+
+            if (totalPages <= 1) return;
+
+            for (let i = 1; i <= totalPages; i++) {
+                const li = document.createElement('li');
+                li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                li.innerHTML = `<a class="page-link" href="#" data-page="${i}">${i}</a>`;
+                li.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    currentPage = i;
+                    renderJobs();
+                });
+                container.appendChild(li);
+            }
+        }
+
+        // Szűrők alkalmazása
+        function applyFilters() {
+            const searchTerm = document.getElementById('search-filter').value.toLowerCase();
+            const locationFilter = document.getElementById('location-filter').value;
+            const sortBy = document.getElementById('sort-filter').value;
+
+            filteredJobs = allJobs.filter(job => {
+                const matchesSearch = !searchTerm || 
+                    job.pozicio.toLowerCase().includes(searchTerm) ||
+                    job.ceg.toLowerCase().includes(searchTerm);
+                const matchesLocation = !locationFilter || job.lokacio.includes(locationFilter);
+                return matchesSearch && matchesLocation;
+            });
+
+            // Rendezés
+            filteredJobs.sort((a, b) => {
+                switch (sortBy) {
+                    case 'company':
+                        return a.ceg.localeCompare(b.ceg);
+                    case 'position':
+                        return a.pozicio.localeCompare(b.pozicio);
+                    case 'date':
+                    default:
+                        return new Date(b.publikalva) - new Date(a.publikalva);
+                }
+            });
+
+            currentPage = 1;
+            renderJobs();
+            updateResultsCount();
+        }
+
+        // Eredmények száma frissítése
+        function updateResultsCount() {
+            document.getElementById('results-count').textContent = 
+                `${filteredJobs.length} állás`;
+        }
+
+        // CSV export
+        function exportToCSV() {
+            const csvContent = [
+                ['Pozíció', 'Cég', 'Lokáció', 'Publikálva', 'Link'],
+                ...filteredJobs.map(job => [
+                    job.pozicio,
+                    job.ceg,
+                    job.lokacio,
+                    job.publikalva,
+                    job.link
+                ])
+            ].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `allasok_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+        }
+
+        // Event listeners
+        document.getElementById('search-btn').addEventListener('click', startSearch);
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            selectedCategories = [];
+            document.querySelectorAll('.category-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            document.getElementById('search-btn').disabled = true;
+        });
+
+        document.getElementById('search-filter').addEventListener('input', applyFilters);
+        document.getElementById('location-filter').addEventListener('change', applyFilters);
+        document.getElementById('sort-filter').addEventListener('change', applyFilters);
+        document.getElementById('clear-filters').addEventListener('click', () => {
+            document.getElementById('search-filter').value = '';
+            document.getElementById('location-filter').value = '';
+            document.getElementById('sort-filter').value = 'date';
+            applyFilters();
+        });
+
+        document.getElementById('export-csv').addEventListener('click', exportToCSV);
+
+        // Inicializálás
+        loadCategories();
+    </script>
+</body>
+</html>
