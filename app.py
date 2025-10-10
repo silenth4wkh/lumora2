@@ -559,9 +559,24 @@ def search_jobs():
         # Alap IT főfeed
         search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
         
-        # Összes kulcsszó (maximalista lefedettség)
-        for keyword in sorted(set(ALL_KEYWORDS), key=str.lower):
-            search_queries.append((f"Profession – {keyword}", keyword))
+        # Csak a legfontosabb kulcsszavak (teszteléshez)
+        priority_keywords = [
+            # Legfontosabb nyelvek
+            "java", "python", "c#", ".net", "javascript", "typescript", "php",
+            # Legfontosabb frameworkök  
+            "react", "angular", "vue", "spring", "django", "laravel", "node.js",
+            # Legfontosabb területek
+            "frontend", "backend", "full stack", "devops", "data scientist", "mobile",
+            # Magyar kulcsszavak
+            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök"
+        ]
+        
+        for keyword in priority_keywords:
+            if keyword in ALL_KEYWORDS:
+                search_queries.append((f"Profession – {keyword}", keyword))
+        
+        print(f"🔍 Összesen {len(search_queries)} kulcsszavas keresés + IT főfeed")
+        print(f"📝 Kulcsszavak: {len(ALL_KEYWORDS)} egyedi kulcsszó")
         
         sess = requests.Session()
         
@@ -590,6 +605,8 @@ def search_jobs():
                 if items:
                     sample_links = [item["Link"] for item in items[:3]]
                     print(f"   Sample links: {sample_links}")
+                else:
+                    print(f"   ⚠️ Nincs állás ebben a feed-ben: {url}")
                 
                 kept = 0
                 skipped = 0
@@ -606,11 +623,14 @@ def search_jobs():
                         skipped += 1
                         continue
 
-                    # Enrichment: cég + lokáció részoldalról
-                    company, location = fetch_job_meta(link, session=sess, retries=2, pause=0.35)
-                    # Fallback: cég a leírásból, ha ott maradt
-                    if not company:
-                        company = parse_company_from_summary(desc)
+                    # Gyors mód: cég csak a leírásból (teszteléshez)
+                    company = parse_company_from_summary(desc)
+                    location = "N/A"
+                    
+                    # Enrichment kikapcsolva a gyors teszteléshez
+                    # company, location = fetch_job_meta(link, session=sess, retries=2, pause=0.35)
+                    # if not company:
+                    #     company = parse_company_from_summary(desc)
 
                     seen_links.add(link)
                     all_rows.append({
@@ -626,11 +646,13 @@ def search_jobs():
                     })
                     kept += 1
 
-                    # Kímélet a szerver felé
-                    time.sleep(0.15)
+                    # Gyors mód: nincs delay (teszteléshez)
+                    # time.sleep(0.15)
 
                 per_source_kept[name] = kept
                 per_source_skipped[name] = skipped
+                
+                print(f"   ✅ Megtartva: {kept}, Kihagyva: {skipped}")
                 
                 # Kímélet a szerver felé (feedek között)
                 time.sleep(0.15)
