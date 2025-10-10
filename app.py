@@ -176,7 +176,7 @@ def is_probably_dev(title: str, desc: str) -> bool:
         return False
     return True
 
-def fetch_html_jobs(source_name: str, url: str, max_pages: int = 5):
+def fetch_html_jobs(source_name: str, url: str, max_pages: int = 20):
     """HTML scraping a Profession.hu álláslistákról - több oldal feldolgozása"""
     if not BeautifulSoup:
         print("BeautifulSoup nincs telepítve, RSS fallback használata")
@@ -205,6 +205,7 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = 5):
             
             if not job_cards:
                 # Ha nincs több állás, szakítsuk meg
+                print(f"   ⏹️ Nincs több állás az oldalon, leállítás")
                 break
             
             for card in job_cards:
@@ -250,14 +251,14 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = 5):
                     print(f"ERROR parsing job card: {e}")
                     continue
             
-            # Kímélet a szerver felé
-            time.sleep(0.5)
+            # Kímélet a szerver felé (csökkentett delay)
+            time.sleep(0.2)
             
         except Exception as e:
             print(f"ERROR fetching page {page}: {e}")
             break
     
-    print(f"DEBUG: {source_name} - Összesen {len(all_items)} állás {max_pages} oldalról")
+    print(f"DEBUG: {source_name} - Összesen {len(all_items)} állás {page-1} oldalról (max {max_pages})")
     return all_items
 
 def fetch_rss_items(source_name: str, url: str):
@@ -711,12 +712,19 @@ def search_jobs():
         scraped_jobs = all_rows
         
         print(f"\n✅ {len(all_rows)} fejlesztői állás találva, {len(search_queries)} kulcsszóval")
+        print(f"📈 Összesen {len(seen_links)} egyedi állás link")
         
         # Top források statisztikája
         print("\n📊 Forrásösszegzés (megtartott / kihagyott):")
-        sorted_sources = sorted(per_source_kept.items(), key=lambda x: x[1], reverse=True)[:10]
+        sorted_sources = sorted(per_source_kept.items(), key=lambda x: x[1], reverse=True)[:15]
         for name, kept in sorted_sources:
             print(f"  • {name}: {kept} / {per_source_skipped[name]}")
+        
+        # Duplikáció statisztikák
+        total_processed = sum(per_source_kept.values()) + sum(per_source_skipped.values())
+        total_duplicates = sum(per_source_skipped.values())
+        duplicate_rate = (total_duplicates / total_processed * 100) if total_processed > 0 else 0
+        print(f"\n🔄 Duplikáció arány: {duplicate_rate:.1f}% ({total_duplicates}/{total_processed})")
         
         return jsonify({
             "message": "Turbó keresés befejezve", 
