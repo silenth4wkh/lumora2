@@ -242,6 +242,21 @@ def fetch_html_jobs(source_name: str, url: str):
     
     return items
 
+def fetch_rss_items(source_name: str, url: str):
+    """RSS feed feldolgozása"""
+    r = requests.get(url, headers=HEADERS, timeout=25)
+    r.raise_for_status()
+    r.encoding = "utf-8"
+    root = ET.fromstring(r.text)
+    items = []
+    for it in root.findall(".//item"):
+        title = clean_text(it.findtext("title",""))
+        link  = (it.findtext("link","") or "").strip()
+        desc  = clean_text(it.findtext("description",""))
+        pub   = (it.findtext("pubDate","") or "").strip()
+        items.append({"Forrás": source_name, "Pozíció": title, "Link": link, "Leírás": desc, "Publikálva": pub, "Cég": "", "Lokáció": ""})
+    return items
+
 def fetch_rss_fallback(source_name: str, url: str):
     """RSS fallback ha HTML scraping nem működik"""
     rss_url = url + "?rss"
@@ -453,9 +468,22 @@ def search_jobs():
         # Alap IT főfeed
         search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
         
-        # Összes kulcsszó (maximalista lefedettség)
-        for keyword in sorted(set(ALL_KEYWORDS), key=str.lower):
-            search_queries.append((f"Profession – {keyword}", keyword))
+        # Csak a legfontosabb kulcsszavak (optimalizált lefedettség)
+        priority_keywords = [
+            # Legfontosabb nyelvek
+            "java", "python", "c#", ".net", "javascript", "typescript", "php", "go", "rust",
+            # Legfontosabb frameworkök
+            "react", "angular", "vue", "spring", "django", "laravel", "node.js", "express",
+            # Legfontosabb területek
+            "frontend", "backend", "full stack", "devops", "data scientist", "machine learning",
+            "mobile", "android", "ios", "flutter", "react native",
+            # Magyar kulcsszavak
+            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök"
+        ]
+        
+        for keyword in priority_keywords:
+            if keyword in ALL_KEYWORDS:
+                search_queries.append((f"Profession – {keyword}", keyword))
         
         sess = requests.Session()
         
@@ -475,12 +503,29 @@ def search_jobs():
                 items = fetch_rss_items(name, url)
                 print(f"🔎 {name} - {len(items)} állás")
                 
+                # Debug: első néhány link ellenőrzése
+                if items:
+                    sample_links = [item["Link"] for item in items[:3]]
+                    print(f"   Sample links: {sample_links}")
+                
                 kept = 0
                 skipped = 0
                 
                 for it in items:
                     link = it["Link"]
                     if not link or link in seen_links:
+                        skipped += 1
+                        continue
+
+                    # Link javítása ha szükséges
+                    if link and not link.startswith("http"):
+                        if link.startswith("/"):
+                            link = "https://www.profession.hu" + link
+                        else:
+                            link = "https://www.profession.hu/" + link
+                    
+                    # Link ellenőrzése
+                    if not link or "profession.hu" not in link:
                         skipped += 1
                         continue
 
