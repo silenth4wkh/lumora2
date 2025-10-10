@@ -205,11 +205,18 @@ def run_scraper_async(selected_categories, progress_queue):
     seen_links = set()
     
     # Feed lista generálása a kiválasztott kategóriák alapján
-    feed_list = [("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss")]
+    feed_list = [
+        ("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"),
+        ("Profession – Fejlesztő", "https://www.profession.hu/allasok/1,0,0,fejlesztő?rss"),
+        ("Profession – Programozó", "https://www.profession.hu/allasok/1,0,0,programozó?rss"),
+        ("Profession – Szoftver", "https://www.profession.hu/allasok/1,0,0,szoftver?rss")
+    ]
     
+    # Csak a legfontosabb kulcsszavakhoz generálunk feedet (max 3 per kategória)
     for cat_id in selected_categories:
         if cat_id in CATEGORIES:
-            for keyword in CATEGORIES[cat_id]["keywords"]:
+            keywords = CATEGORIES[cat_id]["keywords"][:3]  # Csak az első 3 kulcsszó
+            for keyword in keywords:
                 feed_list.append((f"Profession – {keyword}", build_feed_url(keyword)))
     
     sess = requests.Session()
@@ -220,6 +227,7 @@ def run_scraper_async(selected_categories, progress_queue):
         
         try:
             items = fetch_rss_items(name, url)
+            progress_queue.put({"debug": f"{name}: {len(items)} állás találva"})
         except Exception as e:
             progress_queue.put({"error": f"Kihagyva ({name}): {str(e)}"})
             continue
@@ -255,7 +263,16 @@ def run_scraper_async(selected_categories, progress_queue):
 
         time.sleep(0.1)
     
-    progress_queue.put({"progress": 100, "status": "Kész!", "data": all_rows})
+    progress_queue.put({
+        "progress": 100, 
+        "status": "Kész!", 
+        "data": all_rows,
+        "stats": {
+            "total_feeds": total_feeds,
+            "total_jobs": len(all_rows),
+            "unique_links": len(seen_links)
+        }
+    })
 
 # API végpontok
 @app.route('/')
