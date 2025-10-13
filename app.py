@@ -724,6 +724,7 @@ def search_jobs():
                 
                 # Progress mentés (ha megszakad, legalább ezek megmaradnak)
                 if len(all_rows) > 0:
+                    global scraped_jobs
                     scraped_jobs = all_rows
                     print(f"💾 Mentett állások: {len(all_rows)} (folyamatban)")
                     print(f"📊 Progress: {((i+1) / total_queries) * 100:.1f}% - {len(all_rows)} állás eddig")
@@ -739,7 +740,6 @@ def search_jobs():
                 continue
         
         # Globális változó frissítése
-        global scraped_jobs
         scraped_jobs = all_rows
         
         # Progress mentés (ha megszakad, legalább ezek megmaradnak)
