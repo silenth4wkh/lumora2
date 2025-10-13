@@ -578,11 +578,9 @@ def search_jobs():
         # Alap IT főfeed
         search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
         
-        # HTML scraping - csak a legfontosabb kulcsszavak
+        # HTML scraping - TESZT: csak 3 kulcsszó a duplikáció ellenőrzéséhez
         priority_keywords = [
-            # Legfontosabb területek (kevesebb duplikáció)
-            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök",
-            "frontend", "backend", "full stack", "devops", "data scientist", "mobile"
+            "fejlesztő", "programozó", "szoftver"
         ]
         
         for keyword in priority_keywords:
@@ -644,6 +642,7 @@ def search_jobs():
                 if items:
                     sample_links = [item["Link"] for item in items[:3]]
                     print(f"   Sample links: {sample_links}")
+                    print(f"   📊 Eredeti állások száma: {len(items)}")
                 else:
                     print(f"   ⚠️ Nincs állás ebben a feed-ben: {url}")
                 
@@ -656,9 +655,8 @@ def search_jobs():
                         skipped += 1
                         continue
 
-                    # Csak a teljes link alapján duplikáció ellenőrzés (nem a session paraméterek miatt)
-                    clean_link = link.split('?')[0]  # Eltávolítjuk a query paramétereket
-                    if clean_link in seen_links:
+                    # Duplikáció ellenőrzés - teljes link alapján (session paramétereket is figyelembe véve)
+                    if link in seen_links:
                         skipped += 1
                         continue
 
@@ -672,7 +670,7 @@ def search_jobs():
                     company = it.get("Cég", "") or parse_company_from_summary(desc) or "N/A"
                     location = it.get("Lokáció", "") or "N/A"
 
-                    seen_links.add(clean_link)
+                    seen_links.add(link)
                     all_rows.append({
                         "id": len(all_rows) + 1,
                         "forras": it["Forrás"],
@@ -694,11 +692,16 @@ def search_jobs():
                 
                 print(f"   ✅ Megtartva: {kept}, Kihagyva: {skipped}")
                 
-                # Debug: duplikáció statisztikák
-                if kept > 0:
-                    print(f"   📊 Duplikációk: {skipped} (összesen {len(seen_links)} egyedi link)")
-                    if skipped > kept:
-                        print(f"   ⚠️ Sok duplikáció - valószínűleg ugyanazok az állások különböző kulcsszavakkal")
+                # Debug: részletes szűrési statisztikák
+                if items:
+                    print(f"   📊 Feldolgozott: {len(items)} állás")
+                    print(f"   🔗 Egyedi linkek: {len(seen_links)}")
+                    print(f"   ✅ Megtartva: {kept}")
+                    print(f"   ❌ Kihagyva: {skipped}")
+                    if skipped > 0:
+                        print(f"   🔍 Kihagyás okai: duplikáció vagy nem fejlesztői")
+                elif skipped > kept:
+                    print(f"   ⚠️ Sok duplikáció - valószínűleg ugyanazok az állások különböző kulcsszavakkal")
                 
                 # Kímélet a szerver felé (feedek között)
                 time.sleep(0.15)
