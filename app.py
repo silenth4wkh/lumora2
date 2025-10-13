@@ -264,8 +264,8 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = 30):
                     print(f"ERROR parsing job card: {e}")
                     continue
             
-            # Kímélet a szerver felé (növelt delay)
-            time.sleep(1.5)
+            # Kímélet a szerver felé (növelt delay - több oldal miatt)
+            time.sleep(2.0)
             
         except Exception as e:
             print(f"ERROR fetching page {page}: {e}")
@@ -588,7 +588,7 @@ def search_jobs():
         # Turbó kulcsszavas keresés - minden kulcsszóhoz külön keresés
         search_queries = []
         
-        # Alap IT főoldal - teljes lefedettség (575 állás = ~29 oldal)
+        # Alap IT főoldal - teljes lefedettség (575+ állás = ~40 oldal, jövőbeli növekedésre)
         search_queries.append(("Profession – IT főoldal", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10"))
         
         # Kiegészítő kulcsszavak - csak azokat, amik nincsenek az IT főoldalon
@@ -651,15 +651,15 @@ def search_jobs():
                         # HTML scraping - speciális logika IT főoldalhoz
                         url = keyword_or_url
                         if "it-programozas-fejlesztes" in url:
-                            # IT főoldal - 30 oldal (575 állás)
-                            items = fetch_html_jobs(name, url, max_pages=30)
+                            # IT főoldal - 40 oldal (575+ állás, jövőbeli növekedésre)
+                            items = fetch_html_jobs(name, url, max_pages=40)
                         else:
-                            # Kiegészítő keresések - 5 oldal
-                            items = fetch_html_jobs(name, url, max_pages=5)
+                            # Kiegészítő keresések - 15 oldal (pl. python 9 oldal)
+                            items = fetch_html_jobs(name, url, max_pages=15)
                 else:
-                    # Kulcsszavas keresés - HTML scraping (5 oldal)
+                    # Kulcsszavas keresés - HTML scraping (15 oldal)
                     url = f"https://www.profession.hu/allasok/1,0,0,{quote(keyword_or_url, safe='')}"
-                    items = fetch_html_jobs(name, url, max_pages=5)
+                    items = fetch_html_jobs(name, url, max_pages=15)
                 print(f"🔎 {name} - {len(items)} állás")
                 
                 # Debug: első néhány link ellenőrzése
@@ -668,7 +668,9 @@ def search_jobs():
                     print(f"   Sample links: {sample_links}")
                     print(f"   📊 Eredeti állások száma: {len(items)}")
                     if "it-programozas-fejlesztes" in url:
-                        print(f"   🎯 IT főoldal - várható ~575 állás")
+                        print(f"   🎯 IT főoldal - várható ~575+ állás (40 oldal)")
+                    elif "python" in url.lower():
+                        print(f"   🐍 Python keresés - várható ~180 állás (15 oldal)")
                 else:
                     print(f"   ⚠️ Nincs állás ebben a feed-ben: {url}")
                 
@@ -736,8 +738,8 @@ def search_jobs():
                     scraped_jobs = all_rows
                     print(f"💾 Mentett állások: {len(all_rows)} (folyamatban)")
                 
-                # Kímélet a szerver felé (feedek között)
-                time.sleep(2.5)
+                # Kímélet a szerver felé (feedek között - több oldal miatt)
+                time.sleep(3.0)
 
             except Exception as e:
                 print(f"⚠️ Kihagyva ({name}): {str(e)}")
