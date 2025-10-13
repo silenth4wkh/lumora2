@@ -176,7 +176,7 @@ def is_probably_dev(title: str, desc: str) -> bool:
         return False
     return True
 
-def fetch_html_jobs(source_name: str, url: str, max_pages: int = 20):
+def fetch_html_jobs(source_name: str, url: str, max_pages: int = 8):
     """HTML scraping a Profession.hu álláslistákról - több oldal feldolgozása"""
     if not BeautifulSoup:
         print("BeautifulSoup nincs telepítve, RSS fallback használata")
@@ -189,8 +189,21 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = 20):
             # Oldalszámozás hozzáadása
             page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
             
-            r = requests.get(page_url, headers=HEADERS, timeout=25)
-            r.raise_for_status()
+            # Retry logika timeout esetén
+            max_retries = 3
+            for retry in range(max_retries):
+                try:
+                    r = requests.get(page_url, headers=HEADERS, timeout=30)
+                    r.raise_for_status()
+                    break
+                except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                    if retry < max_retries - 1:
+                        wait_time = (retry + 1) * 5
+                        print(f"   ⚠️ Timeout/Connection error, retry {retry + 1}/{max_retries} in {wait_time}s: {e}")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"   ❌ Max retries reached, skipping page {page}")
+                        raise e
             r.encoding = "utf-8"
             
             soup = BeautifulSoup(r.text, "html.parser")
@@ -251,8 +264,8 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = 20):
                     print(f"ERROR parsing job card: {e}")
                     continue
             
-            # Kímélet a szerver felé (csökkentett delay)
-            time.sleep(0.2)
+            # Kímélet a szerver felé (növelt delay)
+            time.sleep(1.0)
             
         except Exception as e:
             print(f"ERROR fetching page {page}: {e}")
@@ -704,7 +717,7 @@ def search_jobs():
                     print(f"   ⚠️ Sok duplikáció - valószínűleg ugyanazok az állások különböző kulcsszavakkal")
                 
                 # Kímélet a szerver felé (feedek között)
-                time.sleep(0.15)
+                time.sleep(2.0)
 
             except Exception as e:
                 print(f"⚠️ Kihagyva ({name}): {str(e)}")
@@ -713,6 +726,9 @@ def search_jobs():
         # Globális változó frissítése
         global scraped_jobs
         scraped_jobs = all_rows
+        
+        # Progress mentés (ha megszakad, legalább ezek megmaradnak)
+        print(f"💾 Mentett állások: {len(all_rows)}")
         
         print(f"\n✅ {len(all_rows)} fejlesztői állás találva, {len(search_queries)} kulcsszóval")
         print(f"📈 Összesen {len(seen_links)} egyedi állás link")
@@ -753,6 +769,15 @@ scraped_jobs = []
 def get_jobs():
     # Visszaadjuk a scraped állásokat
     return jsonify(scraped_jobs)
+
+@app.route('/api/status')
+def get_status():
+    """Visszaadja a jelenlegi állapotot"""
+    global scraped_jobs
+    return jsonify({
+        "total_jobs": len(scraped_jobs),
+        "status": "ready" if scraped_jobs else "no_data"
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
