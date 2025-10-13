@@ -20,6 +20,13 @@ except Exception:
 app = Flask(__name__)
 CORS(app)
 
+# Error handler for debugging
+@app.errorhandler(Exception)
+def handle_exception(e):
+    error_message = f"Error: {str(e)}"
+    print(f"ERROR: {error_message}")
+    return jsonify({"error": error_message, "type": type(e).__name__}), 500
+
 # Scraper kód (a te kódból)
 KW_LANG = [
     "java","python","c#",".net","dotnet","c++","cpp","golang","go","rust","php","ruby","scala","haskell",
@@ -574,13 +581,12 @@ def get_categories():
 
 @app.route('/api/search', methods=['POST'])
 def search_jobs():
-    data = request.json
-    selected_categories = data.get('categories', [])
-    
-    if not selected_categories:
-        return jsonify({"error": "Válassz legalább egy kategóriát!"}), 400
-    
     try:
+        data = request.json
+        selected_categories = data.get('categories', [])
+        
+        if not selected_categories:
+            return jsonify({"error": "Válassz legalább egy kategóriát!"}), 400
         # Scraper futtatása szinkron módon (egyszerűsített verzió)
         all_rows = []
         seen_links = set()
@@ -776,7 +782,12 @@ def search_jobs():
         })
         
     except Exception as e:
-        return jsonify({"error": f"Hiba a keresés során: {str(e)}"}), 500
+        error_message = f"Keresési hiba: {str(e)}"
+        print(f"SEARCH ERROR: {error_message}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": error_message, "type": type(e).__name__}), 500
 
 @app.route('/api/progress')
 def get_progress():
@@ -799,6 +810,11 @@ def get_status():
         "total_jobs": len(scraped_jobs),
         "status": "ready" if scraped_jobs else "no_data"
     })
+
+@app.route('/api/test')
+def test_endpoint():
+    """Egyszerű test endpoint"""
+    return jsonify({"message": "API működik!", "timestamp": datetime.now().isoformat()})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
