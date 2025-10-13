@@ -597,9 +597,23 @@ def search_jobs():
         # Alap IT főoldal - teljes lefedettség (575+ állás = ~40 oldal, jövőbeli növekedésre)
         search_queries.append(("Profession – IT főoldal", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10"))
         
-        # Kiegészítő kulcsszavak - csak 2 db (stabilitásért)
+        # Kiegészítő kulcsszavak - teljes lefedettség
         priority_keywords = [
-            "python", "react"
+            # Alap pozíciók
+            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök",
+            "szoftvertesztelő", "tesztelő", "QA", "quality assurance",
+            # Frontend/Backend
+            "frontend", "backend", "full stack", "fullstack", "web fejlesztő",
+            "react", "angular", "vue", "javascript", "typescript", "node.js",
+            # Backend technológiák
+            "python", "java", "c#", "php", "ruby", "go", "rust",
+            "spring", "django", "flask", "laravel", "express",
+            # Adatbázis és DevOps
+            "devops", "data scientist", "data engineer", "database", "sql", "nosql",
+            "docker", "kubernetes", "aws", "azure", "gcp", "terraform",
+            # Mobile és egyéb
+            "mobile", "ios", "android", "flutter", "react native",
+            "machine learning", "AI", "artificial intelligence", "blockchain"
         ]
         
         for keyword in priority_keywords:
@@ -607,17 +621,28 @@ def search_jobs():
                 # HTML scraping URL (nem RSS) - kevesebb oldal, mert csak kiegészítés
                 search_queries.append((f"Profession – {keyword}", f"https://www.profession.hu/allasok/1,0,0,{quote(keyword, safe='')}"))
         
-        # Alternatív megközelítés: csak 1 keresés (stabilitásért)
+        # Alternatív megközelítés: teljes lefedettség
         alternative_searches = [
-            ("Profession – Docker", "https://www.profession.hu/allasok/1,0,0,docker")
+            # Különböző pozíciók
+            ("Profession – IT Manager", "https://www.profession.hu/allasok/1,0,0,it%20manager"),
+            ("Profession – System Admin", "https://www.profession.hu/allasok/1,0,0,rendszergazda"),
+            ("Profession – Project Manager", "https://www.profession.hu/allasok/1,0,0,projekt%20menedzser"),
+            ("Profession – Product Manager", "https://www.profession.hu/allasok/1,0,0,product%20manager"),
+            # Különböző technológiák
+            ("Profession – Docker", "https://www.profession.hu/allasok/1,0,0,docker"),
+            ("Profession – AWS", "https://www.profession.hu/allasok/1,0,0,aws"),
+            ("Profession – SQL", "https://www.profession.hu/allasok/1,0,0,sql"),
+            ("Profession – Linux", "https://www.profession.hu/allasok/1,0,0,linux"),
+            ("Profession – Git", "https://www.profession.hu/allasok/1,0,0,git"),
+            ("Profession – API", "https://www.profession.hu/allasok/1,0,0,api")
         ]
         
         for name, url in alternative_searches:
             search_queries.append((name, url))
         
-        print(f"🔍 Összesen {len(search_queries)} kulcsszavas keresés (minimális konfiguráció)")
-        print(f"📝 Kulcsszavak: {len(priority_keywords)} kiegészítő + 2 alternatív")
-        print(f"🎯 IT főoldal: 20 oldal, Kiegészítő: 10 oldal")
+        print(f"🔍 Összesen {len(search_queries)} kulcsszavas keresés (teljes lefedettség)")
+        print(f"📝 Kulcsszavak: {len(priority_keywords)} kiegészítő + {len(alternative_searches)} alternatív")
+        print(f"🎯 IT főoldal: 30 oldal (578 állás), Kiegészítő: 20 oldal")
         
         sess = requests.Session()
         
@@ -641,15 +666,15 @@ def search_jobs():
                         # HTML scraping - speciális logika IT főoldalhoz
                         url = keyword_or_url
                         if "it-programozas-fejlesztes" in url:
-                            # IT főoldal - 20 oldal (stabilitásért)
-                            items = fetch_html_jobs(name, url, max_pages=20)
+                            # IT főoldal - 30 oldal (578 állás lefedettségéhez)
+                            items = fetch_html_jobs(name, url, max_pages=30)
                         else:
-                            # Kiegészítő keresések - 10 oldal (stabilitásért)
-                            items = fetch_html_jobs(name, url, max_pages=10)
+                            # Kiegészítő keresések - 20 oldal (teljes lefedettség)
+                            items = fetch_html_jobs(name, url, max_pages=20)
                 else:
-                    # Kulcsszavas keresés - HTML scraping (10 oldal)
+                    # Kulcsszavas keresés - HTML scraping (20 oldal)
                     url = f"https://www.profession.hu/allasok/1,0,0,{quote(keyword_or_url, safe='')}"
-                    items = fetch_html_jobs(name, url, max_pages=10)
+                    items = fetch_html_jobs(name, url, max_pages=20)
                 print(f"🔎 {name} - {len(items)} állás")
                 
                 # Debug: első néhány link ellenőrzése
