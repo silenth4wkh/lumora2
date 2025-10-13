@@ -176,7 +176,7 @@ def is_probably_dev(title: str, desc: str) -> bool:
         return False
     return True
 
-def fetch_html_jobs(source_name: str, url: str, max_pages: int = 10):
+def fetch_html_jobs(source_name: str, url: str, max_pages: int = 30):
     """HTML scraping a Profession.hu álláslistákról - több oldal feldolgozása"""
     if not BeautifulSoup:
         print("BeautifulSoup nincs telepítve, RSS fallback használata")
@@ -588,31 +588,23 @@ def search_jobs():
         # Turbó kulcsszavas keresés - minden kulcsszóhoz külön keresés
         search_queries = []
         
-        # Alap IT főfeed
-        search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
+        # Alap IT főoldal - teljes lefedettség (575 állás = ~29 oldal)
+        search_queries.append(("Profession – IT főoldal", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10"))
         
-        # HTML scraping - teljes lefedettség minden fejlesztői területre
+        # Kiegészítő kulcsszavak - csak azokat, amik nincsenek az IT főoldalon
         priority_keywords = [
-            # Alap pozíciók
-            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök",
-            "szoftvertesztelő", "tesztelő", "QA", "quality assurance",
-            # Frontend/Backend
-            "frontend", "backend", "full stack", "fullstack", "web fejlesztő",
-            "react", "angular", "vue", "javascript", "typescript", "node.js",
-            # Backend technológiák
+            # Specifikus technológiák, amik kimaradhatnak
+            "react", "angular", "vue", "typescript", "node.js",
             "python", "java", "c#", "php", "ruby", "go", "rust",
-            "spring", "django", "flask", "laravel", "express",
-            # Adatbázis és DevOps
-            "devops", "data scientist", "data engineer", "database", "sql", "nosql",
-            "docker", "kubernetes", "aws", "azure", "gcp", "terraform",
-            # Mobile és egyéb
+            "docker", "kubernetes", "aws", "azure", "gcp",
             "mobile", "ios", "android", "flutter", "react native",
-            "machine learning", "AI", "artificial intelligence", "blockchain"
+            "machine learning", "AI", "artificial intelligence", "blockchain",
+            "data scientist", "data engineer", "devops"
         ]
         
         for keyword in priority_keywords:
             if keyword in ALL_KEYWORDS:
-                # HTML scraping URL (nem RSS)
+                # HTML scraping URL (nem RSS) - kevesebb oldal, mert csak kiegészítés
                 search_queries.append((f"Profession – {keyword}", f"https://www.profession.hu/allasok/1,0,0,{quote(keyword, safe='')}"))
         
         # Alternatív megközelítés: teljesen különböző keresések
@@ -656,13 +648,18 @@ def search_jobs():
                         url = keyword_or_url
                         items = fetch_rss_items(name, url)
                     else:
-                        # HTML scraping
+                        # HTML scraping - speciális logika IT főoldalhoz
                         url = keyword_or_url
-                        items = fetch_html_jobs(name, url)
+                        if "it-programozas-fejlesztes" in url:
+                            # IT főoldal - 30 oldal (575 állás)
+                            items = fetch_html_jobs(name, url, max_pages=30)
+                        else:
+                            # Kiegészítő keresések - 5 oldal
+                            items = fetch_html_jobs(name, url, max_pages=5)
                 else:
-                    # Kulcsszavas keresés - HTML scraping
+                    # Kulcsszavas keresés - HTML scraping (5 oldal)
                     url = f"https://www.profession.hu/allasok/1,0,0,{quote(keyword_or_url, safe='')}"
-                    items = fetch_html_jobs(name, url)
+                    items = fetch_html_jobs(name, url, max_pages=5)
                 print(f"🔎 {name} - {len(items)} állás")
                 
                 # Debug: első néhány link ellenőrzése
@@ -670,6 +667,8 @@ def search_jobs():
                     sample_links = [item["Link"] for item in items[:3]]
                     print(f"   Sample links: {sample_links}")
                     print(f"   📊 Eredeti állások száma: {len(items)}")
+                    if "it-programozas-fejlesztes" in url:
+                        print(f"   🎯 IT főoldal - várható ~575 állás")
                 else:
                     print(f"   ⚠️ Nincs állás ebben a feed-ben: {url}")
                 
