@@ -200,10 +200,10 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = 30):
             max_retries = 5
             for retry in range(max_retries):
                 try:
-                    r = requests.get(page_url, headers=HEADERS, timeout=45)
+                    r = requests.get(page_url, headers=HEADERS, timeout=30)
                     r.raise_for_status()
                     break
-                except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
+                except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError, requests.exceptions.RequestException) as e:
                     if retry < max_retries - 1:
                         wait_time = (retry + 1) * 10
                         print(f"   ⚠️ Error, retry {retry + 1}/{max_retries} in {wait_time}s: {e}")
@@ -597,9 +597,9 @@ def search_jobs():
         # Alap IT főoldal - teljes lefedettség (575+ állás = ~40 oldal, jövőbeli növekedésre)
         search_queries.append(("Profession – IT főoldal", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10"))
         
-        # Kiegészítő kulcsszavak - csak a legfontosabbak (4 db)
+        # Kiegészítő kulcsszavak - csak 2 db (stabilitásért)
         priority_keywords = [
-            "developer", "python", "react", "devops"
+            "python", "react"
         ]
         
         for keyword in priority_keywords:
@@ -607,10 +607,9 @@ def search_jobs():
                 # HTML scraping URL (nem RSS) - kevesebb oldal, mert csak kiegészítés
                 search_queries.append((f"Profession – {keyword}", f"https://www.profession.hu/allasok/1,0,0,{quote(keyword, safe='')}"))
         
-        # Alternatív megközelítés: csak 2 keresés
+        # Alternatív megközelítés: csak 1 keresés (stabilitásért)
         alternative_searches = [
-            ("Profession – Docker", "https://www.profession.hu/allasok/1,0,0,docker"),
-            ("Profession – AWS", "https://www.profession.hu/allasok/1,0,0,aws")
+            ("Profession – Docker", "https://www.profession.hu/allasok/1,0,0,docker")
         ]
         
         for name, url in alternative_searches:
@@ -727,12 +726,16 @@ def search_jobs():
                 if len(all_rows) > 0:
                     scraped_jobs = all_rows
                     print(f"💾 Mentett állások: {len(all_rows)} (folyamatban)")
+                    print(f"📊 Progress: {((i+1) / total_queries) * 100:.1f}% - {len(all_rows)} állás eddig")
                 
                 # Kímélet a szerver felé (feedek között - csökkentett delay)
                 time.sleep(2.0)
 
             except Exception as e:
                 print(f"⚠️ Kihagyva ({name}): {str(e)}")
+                print(f"   Error type: {type(e).__name__}")
+                import traceback
+                print(f"   Traceback: {traceback.format_exc()}")
                 continue
         
         # Globális változó frissítése
@@ -801,6 +804,16 @@ def get_status():
 def test_endpoint():
     """Egyszerű test endpoint"""
     return jsonify({"message": "API működik!", "timestamp": datetime.now().isoformat()})
+
+@app.route('/api/debug')
+def debug_endpoint():
+    """Debug endpoint - jelenlegi állapot"""
+    global scraped_jobs
+    return jsonify({
+        "scraped_jobs_count": len(scraped_jobs),
+        "last_update": datetime.now().isoformat(),
+        "sample_jobs": scraped_jobs[:5] if scraped_jobs else []
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
