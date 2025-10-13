@@ -597,28 +597,34 @@ def search_jobs():
         # Alap IT főoldal - teljes lefedettség (575+ állás = ~40 oldal, jövőbeli növekedésre)
         search_queries.append(("Profession – IT főoldal", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10"))
         
-        # Kiegészítő kulcsszavak - teljes lefedettség
-        priority_keywords = [
-            # Alap pozíciók
+        # Kiegészítő kulcsszavak - csak a nagy találatszámúak (20 oldal)
+        high_volume_keywords = [
+            # Legnagyobb találatszámú pozíciók
             "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök",
-            "szoftvertesztelő", "tesztelő", "QA", "quality assurance",
-            # Frontend/Backend
+            "szoftvertesztelő", "tesztelő", "QA",
+            # Legnagyobb találatszámú technológiák
             "frontend", "backend", "full stack", "fullstack", "web fejlesztő",
             "react", "angular", "vue", "javascript", "typescript", "node.js",
-            # Backend technológiák
-            "python", "java", "c#", "php", "ruby", "go", "rust",
+            "python", "java", "c#", "php", "ruby", "go",
             "spring", "django", "flask", "laravel", "express",
-            # Adatbázis és DevOps
             "devops", "data scientist", "data engineer", "database", "sql", "nosql",
             "docker", "kubernetes", "aws", "azure", "gcp", "terraform",
-            # Mobile és egyéb
-            "mobile", "ios", "android", "flutter", "react native",
-            "machine learning", "AI", "artificial intelligence", "blockchain"
+            "mobile", "ios", "android", "flutter", "react native"
         ]
         
-        for keyword in priority_keywords:
+        # Közepes találatszámú kulcsszavak (10 oldal)
+        medium_volume_keywords = [
+            "quality assurance", "rust", "machine learning", "AI", "artificial intelligence", "blockchain"
+        ]
+        
+        # Nagy találatszámú kulcsszavak (20 oldal)
+        for keyword in high_volume_keywords:
             if keyword in ALL_KEYWORDS:
-                # HTML scraping URL (nem RSS) - kevesebb oldal, mert csak kiegészítés
+                search_queries.append((f"Profession – {keyword}", f"https://www.profession.hu/allasok/1,0,0,{quote(keyword, safe='')}"))
+        
+        # Közepes találatszámú kulcsszavak (10 oldal)
+        for keyword in medium_volume_keywords:
+            if keyword in ALL_KEYWORDS:
                 search_queries.append((f"Profession – {keyword}", f"https://www.profession.hu/allasok/1,0,0,{quote(keyword, safe='')}"))
         
         # Alternatív megközelítés: teljes lefedettség
@@ -640,9 +646,9 @@ def search_jobs():
         for name, url in alternative_searches:
             search_queries.append((name, url))
         
-        print(f"🔍 Összesen {len(search_queries)} kulcsszavas keresés (teljes lefedettség)")
-        print(f"📝 Kulcsszavak: {len(priority_keywords)} kiegészítő + {len(alternative_searches)} alternatív")
-        print(f"🎯 IT főoldal: 30 oldal (578 állás), Kiegészítő: 20 oldal")
+        print(f"🔍 Összesen {len(search_queries)} kulcsszavas keresés (optimalizált lefedettség)")
+        print(f"📝 Kulcsszavak: {len(high_volume_keywords)} nagy találat (20 oldal) + {len(medium_volume_keywords)} közepes (10 oldal) + {len(alternative_searches)} alternatív")
+        print(f"🎯 IT főoldal: 30 oldal (578 állás), Nagy találat: 20 oldal, Közepes: 10 oldal")
         
         sess = requests.Session()
         
@@ -672,9 +678,14 @@ def search_jobs():
                             # Kiegészítő keresések - 20 oldal (teljes lefedettség)
                             items = fetch_html_jobs(name, url, max_pages=20)
                 else:
-                    # Kulcsszavas keresés - HTML scraping (20 oldal)
+                    # Kulcsszavas keresés - HTML scraping (dinamikus oldalszám)
                     url = f"https://www.profession.hu/allasok/1,0,0,{quote(keyword_or_url, safe='')}"
-                    items = fetch_html_jobs(name, url, max_pages=20)
+                    # Közepes találatszámú kulcsszavakhoz csak 10 oldal
+                    if any(keyword in name for keyword in medium_volume_keywords):
+                        items = fetch_html_jobs(name, url, max_pages=10)
+                    else:
+                        # Nagy találatszámú kulcsszavakhoz 20 oldal
+                        items = fetch_html_jobs(name, url, max_pages=20)
                 print(f"🔎 {name} - {len(items)} állás")
                 
                 # Debug: első néhány link ellenőrzése
