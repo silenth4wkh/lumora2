@@ -759,6 +759,7 @@ def search_jobs():
         
         print(f"\n✅ {len(all_rows)} fejlesztői állás találva, {len(search_queries)} kulcsszóval")
         print(f"📈 Összesen {len(seen_links)} egyedi állás link")
+        print(f"🎯 VISSZAADOTT ÁLLÁSOK: {len(all_rows)} (összes)")
         
         # Top források statisztikája
         print("\n📊 Forrásösszegzés (megtartott / kihagyott):")
@@ -778,7 +779,7 @@ def search_jobs():
             "total_searches": len(search_queries),
             "unique_links": len(seen_links),
             "top_sources": dict(sorted_sources),
-            "jobs": all_rows[:20]  # Első 20 állás
+            "jobs": all_rows  # Összes állás
         })
         
     except Exception as e:
