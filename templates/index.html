@@ -246,6 +246,18 @@
                     </button>
                 </div>
             </div>
+            
+            <!-- Keresési előzmények szekció -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="mb-3">
+                        <i class="fas fa-history me-2"></i>Korábbi keresések
+                    </h5>
+                    <div id="search-history-container" class="row">
+                        <!-- Itt jelennek meg a keresési előzmények -->
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Portálok listája -->
@@ -354,6 +366,79 @@
         let filteredJobs = [];
         let currentPage = 1;
         const jobsPerPage = 10;
+        
+        // Keresési előzmények
+        let searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+        
+        // Keresési előzmények mentése
+        function saveSearchToHistory(result) {
+            const searchEntry = {
+                id: Date.now(),
+                timestamp: new Date().toLocaleString('hu-HU'),
+                totalJobs: result.total_jobs || 0,
+                uniqueLinks: result.unique_links || 0,
+                totalSearches: result.total_searches || 0,
+                topSources: result.top_sources || {},
+                jobs: result.jobs || []
+            };
+            
+            // Hozzáadás a lista elejére
+            searchHistory.unshift(searchEntry);
+            
+            // Csak az utolsó 5 keresést tartjuk meg
+            if (searchHistory.length > 5) {
+                searchHistory = searchHistory.slice(0, 5);
+            }
+            
+            // Mentés localStorage-ba
+            localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+            
+            // UI frissítése
+            renderSearchHistory();
+        }
+        
+        // Keresési előzmények megjelenítése
+        function renderSearchHistory() {
+            const container = document.getElementById('search-history-container');
+            if (!container) return;
+            
+            if (searchHistory.length === 0) {
+                container.innerHTML = '<p class="text-muted">Még nincsenek keresési előzmények</p>';
+                return;
+            }
+            
+            container.innerHTML = searchHistory.map(entry => `
+                <div class="card mb-2">
+                    <div class="card-body p-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <small class="text-muted">${entry.timestamp}</small>
+                                <div class="fw-bold">${entry.totalJobs} állás</div>
+                                <small class="text-muted">${entry.uniqueLinks} egyedi link</small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="loadSearchFromHistory(${entry.id})">
+                                Megnyitás
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Keresés betöltése az előzményekből
+        function loadSearchFromHistory(entryId) {
+            const entry = searchHistory.find(e => e.id === entryId);
+            if (!entry) return;
+            
+            allJobs = entry.jobs;
+            filteredJobs = [...allJobs];
+            
+            document.getElementById('results-container').style.display = 'block';
+            renderJobs();
+            updateResultsCount();
+            
+            console.log(`Keresés betöltve: ${entry.totalJobs} állás`);
+        }
 
         // Portálok betöltése
         async function loadPortals() {
@@ -527,6 +612,11 @@
                     return;
                 }
 
+                // Debug: teljes válasz kiírása
+                console.log('API válasz:', result);
+                console.log('Jobs mező:', result.jobs);
+                console.log('Jobs hossza:', result.jobs ? result.jobs.length : 'nincs jobs mező');
+                
                 // Valódi adatok használata
                 if (result.jobs && result.jobs.length > 0) {
                     allJobs = result.jobs;
@@ -540,8 +630,12 @@
                     renderJobs();
                     updateResultsCount();
                     
-                    console.log(`Találat: ${result.total_jobs} állás`);
+                    console.log(`✅ Találat: ${result.total_jobs} állás`);
+                    
+                    // Keresési előzmények mentése
+                    saveSearchToHistory(result);
                 } else {
+                    console.log('❌ Nincs állás az eredményben, mock adatok használata');
                     // Ha nincs valódi adat, mock adatok
                     completeSearch();
                 }
@@ -851,6 +945,7 @@
         // Inicializálás
         loadPortals();
         loadCategories();
+        renderSearchHistory(); // Keresési előzmények betöltése
     </script>
 </body>
 </html>
