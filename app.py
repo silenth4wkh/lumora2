@@ -176,7 +176,7 @@ def is_probably_dev(title: str, desc: str) -> bool:
         return False
     return True
 
-def fetch_html_jobs(source_name: str, url: str, max_pages: int = 8):
+def fetch_html_jobs(source_name: str, url: str, max_pages: int = 15):
     """HTML scraping a Profession.hu álláslistákról - több oldal feldolgozása"""
     if not BeautifulSoup:
         print("BeautifulSoup nincs telepítve, RSS fallback használata")
@@ -264,8 +264,8 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = 8):
                     print(f"ERROR parsing job card: {e}")
                     continue
             
-            # Kímélet a szerver felé (növelt delay)
-            time.sleep(1.0)
+            # Kímélet a szerver felé (optimalizált delay)
+            time.sleep(0.5)
             
         except Exception as e:
             print(f"ERROR fetching page {page}: {e}")
@@ -591,9 +591,11 @@ def search_jobs():
         # Alap IT főfeed
         search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
         
-        # HTML scraping - TESZT: csak 3 kulcsszó a duplikáció ellenőrzéséhez
+        # HTML scraping - bővített kulcsszavak
         priority_keywords = [
-            "fejlesztő", "programozó", "szoftver"
+            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök",
+            "frontend", "backend", "full stack", "devops", "data scientist", "mobile",
+            "python", "java", "javascript", "react", "angular", "vue"
         ]
         
         for keyword in priority_keywords:
@@ -603,17 +605,12 @@ def search_jobs():
         
         # Alternatív megközelítés: teljesen különböző keresések
         alternative_searches = [
-            # Különböző pozíciók
+            # Különböző pozíciók - csökkentett szám
             ("Profession – IT Manager", "https://www.profession.hu/allasok/1,0,0,it%20manager"),
             ("Profession – System Admin", "https://www.profession.hu/allasok/1,0,0,rendszergazda"),
-            ("Profession – Database", "https://www.profession.hu/allasok/1,0,0,adatbázis"),
-            ("Profession – Network", "https://www.profession.hu/allasok/1,0,0,hálózat"),
-            ("Profession – Security", "https://www.profession.hu/allasok/1,0,0,biztonság"),
             # Különböző technológiák
             ("Profession – Docker", "https://www.profession.hu/allasok/1,0,0,docker"),
-            ("Profession – Kubernetes", "https://www.profession.hu/allasok/1,0,0,kubernetes"),
             ("Profession – AWS", "https://www.profession.hu/allasok/1,0,0,aws"),
-            ("Profession – Azure", "https://www.profession.hu/allasok/1,0,0,azure"),
             ("Profession – SQL", "https://www.profession.hu/allasok/1,0,0,sql")
         ]
         
@@ -668,8 +665,9 @@ def search_jobs():
                         skipped += 1
                         continue
 
-                    # Duplikáció ellenőrzés - teljes link alapján (session paramétereket is figyelembe véve)
-                    if link in seen_links:
+                    # Duplikáció ellenőrzés - clean link alapján (session paramétereket eltávolítjuk)
+                    clean_link = link.split('?')[0]  # Eltávolítjuk a query paramétereket
+                    if clean_link in seen_links:
                         skipped += 1
                         continue
 
@@ -683,7 +681,7 @@ def search_jobs():
                     company = it.get("Cég", "") or parse_company_from_summary(desc) or "N/A"
                     location = it.get("Lokáció", "") or "N/A"
 
-                    seen_links.add(link)
+                    seen_links.add(clean_link)
                     all_rows.append({
                         "id": len(all_rows) + 1,
                         "forras": it["Forrás"],
@@ -717,7 +715,7 @@ def search_jobs():
                     print(f"   ⚠️ Sok duplikáció - valószínűleg ugyanazok az állások különböző kulcsszavakkal")
                 
                 # Kímélet a szerver felé (feedek között)
-                time.sleep(2.0)
+                time.sleep(1.0)
 
             except Exception as e:
                 print(f"⚠️ Kihagyva ({name}): {str(e)}")
