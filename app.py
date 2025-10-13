@@ -183,11 +183,62 @@ def is_probably_dev(title: str, desc: str) -> bool:
         return False
     return True
 
-def fetch_html_jobs(source_name: str, url: str, max_pages: int = 30):
-    """HTML scraping a Profession.hu álláslistákról - több oldal feldolgozása"""
+def get_total_pages(source_name: str, url: str):
+    """Get total number of pages for a search"""
+    try:
+        session = requests.Session()
+        session.headers.update(HEADERS)
+        
+        r = session.get(url, timeout=30)
+        r.raise_for_status()
+        
+        soup = BeautifulSoup(r.content, 'html.parser')
+        
+        # Find pagination info
+        pagination = soup.find('div', class_='pagination') or soup.find('nav', class_='pagination')
+        if pagination:
+            # Look for last page number
+            last_page_links = pagination.find_all('a', href=True)
+            if last_page_links:
+                # Get the last page number from href
+                last_href = last_page_links[-1]['href']
+                if 'page=' in last_href:
+                    page_num = int(last_href.split('page=')[1].split('&')[0])
+                    print(f"📄 {source_name} - Összesen {page_num} oldal található")
+                    return page_num
+        
+        # Fallback: count job cards and estimate pages
+        job_cards = soup.find_all('li', class_='job-card')
+        if not job_cards:
+            job_cards = soup.find_all('div', class_='job-card')
+        
+        if job_cards:
+            # Assume 20 jobs per page
+            estimated_pages = max(1, len(job_cards) // 20)
+            print(f"📄 {source_name} - Becsült oldalszám: {estimated_pages} (alapján: {len(job_cards)} job card)")
+            return estimated_pages
+        
+        print(f"📄 {source_name} - Nem található pagination, 1 oldal használata")
+        return 1
+        
+    except Exception as e:
+        print(f"⚠️ {source_name} - Oldalszám meghatározási hiba: {e}, 1 oldal használata")
+        return 1
+
+def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
+    """HTML scraping a Profession.hu álláslistákról - dinamikus oldalszám"""
     if not BeautifulSoup:
         print("BeautifulSoup nincs telepítve, RSS fallback használata")
         return fetch_rss_fallback(source_name, url)
+    
+    # Get total pages dynamically if not specified
+    if max_pages is None:
+        max_pages = get_total_pages(source_name, url)
+    
+    # Limit to reasonable maximum
+    max_pages = min(max_pages, 50)  # Safety limit
+    
+    print(f"🔍 {source_name} - {max_pages} oldal feldolgozása")
     
     all_items = []
     
@@ -646,9 +697,9 @@ def search_jobs():
         for name, url in alternative_searches:
             search_queries.append((name, url))
         
-        print(f"🔍 Összesen {len(search_queries)} kulcsszavas keresés (optimalizált lefedettség)")
-        print(f"📝 Kulcsszavak: {len(high_volume_keywords)} nagy találat (20 oldal) + {len(medium_volume_keywords)} közepes (10 oldal) + {len(alternative_searches)} alternatív")
-        print(f"🎯 IT főoldal: 30 oldal (578 állás), Nagy találat: 20 oldal, Közepes: 10 oldal")
+        print(f"🔍 Összesen {len(search_queries)} kulcsszavas keresés (dinamikus oldalszám)")
+        print(f"📝 Kulcsszavak: {len(high_volume_keywords)} nagy találat + {len(medium_volume_keywords)} közepes + {len(alternative_searches)} alternatív")
+        print(f"🎯 Dinamikus oldalszám - automatikusan meghatározza a teljes oldalszámot minden kereséshez")
         
         sess = requests.Session()
         
@@ -671,21 +722,13 @@ def search_jobs():
                     else:
                         # HTML scraping - speciális logika IT főoldalhoz
                         url = keyword_or_url
-                        if "it-programozas-fejlesztes" in url:
-                            # IT főoldal - 30 oldal (578 állás lefedettségéhez)
-                            items = fetch_html_jobs(name, url, max_pages=30)
-                        else:
-                            # Kiegészítő keresések - 20 oldal (teljes lefedettség)
-                            items = fetch_html_jobs(name, url, max_pages=20)
+                        # Dinamikus oldalszám - automatikusan meghatározza a teljes oldalszámot
+                        items = fetch_html_jobs(name, url)
                 else:
                     # Kulcsszavas keresés - HTML scraping (dinamikus oldalszám)
                     url = f"https://www.profession.hu/allasok/1,0,0,{quote(keyword_or_url, safe='')}"
-                    # Közepes találatszámú kulcsszavakhoz csak 10 oldal
-                    if any(keyword in name for keyword in medium_volume_keywords):
-                        items = fetch_html_jobs(name, url, max_pages=10)
-                    else:
-                        # Nagy találatszámú kulcsszavakhoz 20 oldal
-                        items = fetch_html_jobs(name, url, max_pages=20)
+                    # Dinamikus oldalszám - automatikusan meghatározza a teljes oldalszámot
+                    items = fetch_html_jobs(name, url)
                 print(f"🔎 {name} - {len(items)} állás")
                 
                 # Debug: első néhány link ellenőrzése
