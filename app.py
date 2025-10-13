@@ -176,7 +176,7 @@ def is_probably_dev(title: str, desc: str) -> bool:
         return False
     return True
 
-def fetch_html_jobs(source_name: str, url: str, max_pages: int = 15):
+def fetch_html_jobs(source_name: str, url: str, max_pages: int = 10):
     """HTML scraping a Profession.hu álláslistákról - több oldal feldolgozása"""
     if not BeautifulSoup:
         print("BeautifulSoup nincs telepítve, RSS fallback használata")
@@ -190,16 +190,16 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = 15):
             page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
             
             # Retry logika timeout esetén
-            max_retries = 3
+            max_retries = 5
             for retry in range(max_retries):
                 try:
-                    r = requests.get(page_url, headers=HEADERS, timeout=30)
+                    r = requests.get(page_url, headers=HEADERS, timeout=45)
                     r.raise_for_status()
                     break
-                except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError) as e:
                     if retry < max_retries - 1:
-                        wait_time = (retry + 1) * 5
-                        print(f"   ⚠️ Timeout/Connection error, retry {retry + 1}/{max_retries} in {wait_time}s: {e}")
+                        wait_time = (retry + 1) * 10
+                        print(f"   ⚠️ Error, retry {retry + 1}/{max_retries} in {wait_time}s: {e}")
                         time.sleep(wait_time)
                     else:
                         print(f"   ❌ Max retries reached, skipping page {page}")
@@ -264,8 +264,8 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = 15):
                     print(f"ERROR parsing job card: {e}")
                     continue
             
-            # Kímélet a szerver felé (optimalizált delay)
-            time.sleep(0.5)
+            # Kímélet a szerver felé (növelt delay)
+            time.sleep(1.5)
             
         except Exception as e:
             print(f"ERROR fetching page {page}: {e}")
@@ -591,11 +591,23 @@ def search_jobs():
         # Alap IT főfeed
         search_queries.append(("Profession – IT főfeed", "https://www.profession.hu/partner/files/rss-it.rss"))
         
-        # HTML scraping - bővített kulcsszavak
+        # HTML scraping - teljes lefedettség minden fejlesztői területre
         priority_keywords = [
+            # Alap pozíciók
             "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök",
-            "frontend", "backend", "full stack", "devops", "data scientist", "mobile",
-            "python", "java", "javascript", "react", "angular", "vue"
+            "szoftvertesztelő", "tesztelő", "QA", "quality assurance",
+            # Frontend/Backend
+            "frontend", "backend", "full stack", "fullstack", "web fejlesztő",
+            "react", "angular", "vue", "javascript", "typescript", "node.js",
+            # Backend technológiák
+            "python", "java", "c#", "php", "ruby", "go", "rust",
+            "spring", "django", "flask", "laravel", "express",
+            # Adatbázis és DevOps
+            "devops", "data scientist", "data engineer", "database", "sql", "nosql",
+            "docker", "kubernetes", "aws", "azure", "gcp", "terraform",
+            # Mobile és egyéb
+            "mobile", "ios", "android", "flutter", "react native",
+            "machine learning", "AI", "artificial intelligence", "blockchain"
         ]
         
         for keyword in priority_keywords:
@@ -605,13 +617,18 @@ def search_jobs():
         
         # Alternatív megközelítés: teljesen különböző keresések
         alternative_searches = [
-            # Különböző pozíciók - csökkentett szám
+            # Különböző pozíciók
             ("Profession – IT Manager", "https://www.profession.hu/allasok/1,0,0,it%20manager"),
             ("Profession – System Admin", "https://www.profession.hu/allasok/1,0,0,rendszergazda"),
+            ("Profession – Project Manager", "https://www.profession.hu/allasok/1,0,0,projekt%20menedzser"),
+            ("Profession – Product Manager", "https://www.profession.hu/allasok/1,0,0,product%20manager"),
             # Különböző technológiák
             ("Profession – Docker", "https://www.profession.hu/allasok/1,0,0,docker"),
             ("Profession – AWS", "https://www.profession.hu/allasok/1,0,0,aws"),
-            ("Profession – SQL", "https://www.profession.hu/allasok/1,0,0,sql")
+            ("Profession – SQL", "https://www.profession.hu/allasok/1,0,0,sql"),
+            ("Profession – Linux", "https://www.profession.hu/allasok/1,0,0,linux"),
+            ("Profession – Git", "https://www.profession.hu/allasok/1,0,0,git"),
+            ("Profession – API", "https://www.profession.hu/allasok/1,0,0,api")
         ]
         
         for name, url in alternative_searches:
@@ -714,8 +731,14 @@ def search_jobs():
                 elif skipped > kept:
                     print(f"   ⚠️ Sok duplikáció - valószínűleg ugyanazok az állások különböző kulcsszavakkal")
                 
+                # Progress mentés (ha megszakad, legalább ezek megmaradnak)
+                if len(all_rows) > 0:
+                    global scraped_jobs
+                    scraped_jobs = all_rows
+                    print(f"💾 Mentett állások: {len(all_rows)} (folyamatban)")
+                
                 # Kímélet a szerver felé (feedek között)
-                time.sleep(1.0)
+                time.sleep(2.5)
 
             except Exception as e:
                 print(f"⚠️ Kihagyva ({name}): {str(e)}")
