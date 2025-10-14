@@ -878,7 +878,19 @@
                     '', // Kapcsolattartó
                     ''  // Lead score
                 ])
-            ].map(row => row.map(field => `"${(field || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+            ].map(row => row.map(field => {
+                // Karakterkódolás javítása
+                let cleanField = (field || '').toString();
+                // Speciális karakterek tisztítása
+                cleanField = cleanField.replace(/\u00a0/g, ' ');  // Non-breaking space
+                cleanField = cleanField.replace(/\u2013/g, '-');  // En dash
+                cleanField = cleanField.replace(/\u2014/g, '--'); // Em dash
+                cleanField = cleanField.replace(/\u2018/g, "'");  // Left single quotation mark
+                cleanField = cleanField.replace(/\u2019/g, "'");  // Right single quotation mark
+                cleanField = cleanField.replace(/\u201c/g, '"');  // Left double quotation mark
+                cleanField = cleanField.replace(/\u201d/g, '"');  // Right double quotation mark
+                return `"${cleanField.replace(/"/g, '""')}"`;
+            }).join(',')).join('\n');
 
             // UTF-8 BOM hozzáadása a magyar karakterekhez
             const BOM = '\uFEFF';

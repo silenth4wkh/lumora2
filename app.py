@@ -170,8 +170,20 @@ CATEGORIES = {
 def clean_text(s: str) -> str:
     if not s:
         return ""
+    # Karakterkódolás javítása
+    if isinstance(s, str):
+        s = s.encode('utf-8', errors='ignore').decode('utf-8')
     s = re.sub(r"<.*?>", " ", s)
-    return re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"\s+", " ", s).strip()
+    # Speciális karakterek tisztítása
+    s = s.replace('\u00a0', ' ')  # Non-breaking space
+    s = s.replace('\u2013', '-')  # En dash
+    s = s.replace('\u2014', '--') # Em dash
+    s = s.replace('\u2018', "'")  # Left single quotation mark
+    s = s.replace('\u2019', "'")  # Right single quotation mark
+    s = s.replace('\u201c', '"')  # Left double quotation mark
+    s = s.replace('\u201d', '"')  # Right double quotation mark
+    return s
 
 def build_feed_url(keyword: str) -> str:
     return BASE.format(quote(keyword, safe=""))
@@ -264,7 +276,12 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                         raise e
             r.encoding = "utf-8"
             
-            soup = BeautifulSoup(r.text, "html.parser")
+            # Karakterkódolás javítása
+            content = r.text
+            if r.encoding.lower() != 'utf-8':
+                content = content.encode('utf-8', errors='ignore').decode('utf-8')
+            
+            soup = BeautifulSoup(content, "html.parser")
             
             # Keresés ul.job-cards > li elemekben
             job_cards = soup.select("ul.job-cards li")
