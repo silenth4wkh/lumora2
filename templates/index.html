@@ -730,15 +730,13 @@
             ];
 
             return Array.from({length: 25}, (_, i) => ({
-                id: i + 1,
-                forras: 'Profession.hu',
-                pozicio: positions[Math.floor(Math.random() * positions.length)],
-                ceg: companies[Math.floor(Math.random() * companies.length)],
-                lokacio: locations[Math.floor(Math.random() * locations.length)],
-                link: `https://www.profession.hu/allasok/1,0,0,${encodeURIComponent(positions[Math.floor(Math.random() * positions.length)].toLowerCase())}?rss`,
-                publikalva: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                lekeres_datuma: new Date().toISOString().split('T')[0],
-                leiras: 'Részletes állásleírás itt található...'
+                "Forrás": 'Profession.hu',
+                "Pozíció": positions[Math.floor(Math.random() * positions.length)],
+                "Cég": companies[Math.floor(Math.random() * companies.length)],
+                "Lokáció": locations[Math.floor(Math.random() * locations.length)],
+                "Link": `https://www.profession.hu/allasok/1,0,0,${encodeURIComponent(positions[Math.floor(Math.random() * positions.length)].toLowerCase())}?rss`,
+                "Publikálva": new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                "Leírás": 'Részletes állásleírás itt található...'
             }));
         }
 
@@ -770,25 +768,25 @@
                         <div class="row">
                             <div class="col-md-8">
                                 <h6 class="card-title mb-1">
-                                    <a href="${job.link}" target="_blank" class="text-decoration-none">
-                                        ${job.pozicio}
+                                    <a href="${job.Link}" target="_blank" class="text-decoration-none">
+                                        ${job.Pozíció}
                                     </a>
                                 </h6>
                                 <p class="text-muted mb-2">
-                                    <i class="fas fa-building me-1"></i>${job.ceg}
+                                    <i class="fas fa-building me-1"></i>${job.Cég || 'N/A'}
                                     <span class="ms-3">
-                                        <i class="fas fa-map-marker-alt me-1"></i>${job.lokacio}
+                                        <i class="fas fa-map-marker-alt me-1"></i>${job.Lokáció || 'N/A'}
                                     </span>
                                 </p>
-                                <p class="card-text small text-muted">${job.leiras}</p>
+                                <p class="card-text small text-muted">${job.Leírás || 'N/A'}</p>
                             </div>
                             <div class="col-md-4 text-end">
                                 <small class="text-muted">
                                     <i class="fas fa-calendar me-1"></i>
-                                    ${new Date(job.publikalva).toLocaleDateString('hu-HU')}
+                                    ${job.Publikálva || 'N/A'}
                                 </small>
                                 <div class="mt-2">
-                                    <a href="${job.link}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <a href="${job.Link}" target="_blank" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-external-link-alt me-1"></i>Megtekintés
                                     </a>
                                 </div>
@@ -831,9 +829,9 @@
 
             filteredJobs = allJobs.filter(job => {
                 const matchesSearch = !searchTerm || 
-                    job.pozicio.toLowerCase().includes(searchTerm) ||
-                    job.ceg.toLowerCase().includes(searchTerm);
-                const matchesLocation = !locationFilter || job.lokacio.includes(locationFilter);
+                    (job.Pozíció && job.Pozíció.toLowerCase().includes(searchTerm)) ||
+                    (job.Cég && job.Cég.toLowerCase().includes(searchTerm));
+                const matchesLocation = !locationFilter || (job.Lokáció && job.Lokáció.includes(locationFilter));
                 return matchesSearch && matchesLocation;
             });
 
@@ -871,18 +869,20 @@
             const csvContent = [
                 ['Cég neve', 'Pozíció', 'Lokáció', 'Link', 'Hiring status', 'Relevancia', 'Kapcsolattartó', 'Lead score'],
                 ...filteredJobs.map(job => [
-                    job.ceg || 'N/A',
-                    job.pozicio || 'N/A',
-                    job.lokacio || 'N/A',
-                    job.link || 'N/A',
+                    job.Cég || 'N/A',
+                    job.Pozíció || 'N/A',
+                    job.Lokáció || 'N/A',
+                    job.Link || 'N/A',
                     'Mixed/Unclear', // Hiring status
                     '', // Relevancia
                     '', // Kapcsolattartó
                     ''  // Lead score
                 ])
-            ].map(row => row.map(field => `"${field}"`).join(',')).join('\n');
+            ].map(row => row.map(field => `"${(field || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
 
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            // UTF-8 BOM hozzáadása a magyar karakterekhez
+            const BOM = '\uFEFF';
+            const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = `allasok_szurt_${new Date().toISOString().split('T')[0]}.csv`;
