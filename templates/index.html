@@ -623,6 +623,10 @@
                     allJobs = result.jobs;
                     filteredJobs = [...allJobs];
                     
+                    // Debug: első állás ellenőrzése
+                    console.log('🔍 Debug - Első állás:', allJobs[0]);
+                    console.log('🔍 Debug - Mezők:', Object.keys(allJobs[0]));
+                    
                     document.getElementById('progress-container').style.display = 'none';
                     document.getElementById('loading-spinner').style.display = 'none';
                     document.getElementById('results-container').style.display = 'block';
@@ -768,25 +772,25 @@
                         <div class="row">
                             <div class="col-md-8">
                                 <h6 class="card-title mb-1">
-                                    <a href="${job.Link}" target="_blank" class="text-decoration-none">
-                                        ${job.Pozíció}
+                                    <a href="${job.Link || job.link || '#'}" target="_blank" class="text-decoration-none">
+                                        ${job.Pozíció || job.pozicio || job.title || 'N/A'}
                                     </a>
                                 </h6>
                                 <p class="text-muted mb-2">
-                                    <i class="fas fa-building me-1"></i>${job.Cég || 'N/A'}
+                                    <i class="fas fa-building me-1"></i>${job.Cég || job.ceg || job.company || 'N/A'}
                                     <span class="ms-3">
-                                        <i class="fas fa-map-marker-alt me-1"></i>${job.Lokáció || 'N/A'}
+                                        <i class="fas fa-map-marker-alt me-1"></i>${job.Lokáció || job.lokacio || job.location || 'N/A'}
                                     </span>
                                 </p>
-                                <p class="card-text small text-muted">${job.Leírás || 'N/A'}</p>
+                                <p class="card-text small text-muted">${job.Leírás || job.leiras || job.description || 'N/A'}</p>
                             </div>
                             <div class="col-md-4 text-end">
                                 <small class="text-muted">
                                     <i class="fas fa-calendar me-1"></i>
-                                    ${job.Publikálva || 'N/A'}
+                                    ${job.Publikálva || job.publikalva || job.published || 'N/A'}
                                 </small>
                                 <div class="mt-2">
-                                    <a href="${job.Link}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <a href="${job.Link || job.link || '#'}" target="_blank" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-external-link-alt me-1"></i>Megtekintés
                                     </a>
                                 </div>
@@ -828,10 +832,14 @@
             const sortBy = document.getElementById('sort-filter').value;
 
             filteredJobs = allJobs.filter(job => {
+                const title = job.Pozíció || job.pozicio || job.title || '';
+                const company = job.Cég || job.ceg || job.company || '';
+                const location = job.Lokáció || job.lokacio || job.location || '';
+                
                 const matchesSearch = !searchTerm || 
-                    (job.Pozíció && job.Pozíció.toLowerCase().includes(searchTerm)) ||
-                    (job.Cég && job.Cég.toLowerCase().includes(searchTerm));
-                const matchesLocation = !locationFilter || (job.Lokáció && job.Lokáció.includes(locationFilter));
+                    title.toLowerCase().includes(searchTerm) ||
+                    company.toLowerCase().includes(searchTerm);
+                const matchesLocation = !locationFilter || location.includes(locationFilter);
                 return matchesSearch && matchesLocation;
             });
 
@@ -869,10 +877,10 @@
             const csvContent = [
                 ['Cég neve', 'Pozíció', 'Lokáció', 'Link', 'Hiring status', 'Relevancia', 'Kapcsolattartó', 'Lead score'],
                 ...filteredJobs.map(job => [
-                    job.Cég || 'N/A',
-                    job.Pozíció || 'N/A',
-                    job.Lokáció || 'N/A',
-                    job.Link || 'N/A',
+                    job.Cég || job.ceg || job.company || 'N/A',
+                    job.Pozíció || job.pozicio || job.title || 'N/A',
+                    job.Lokáció || job.lokacio || job.location || 'N/A',
+                    job.Link || job.link || 'N/A',
                     'Mixed/Unclear', // Hiring status
                     '', // Relevancia
                     '', // Kapcsolattartó
@@ -898,7 +906,14 @@
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = `allasok_szurt_${new Date().toISOString().split('T')[0]}.csv`;
+            
+            // Link hozzáadása a DOM-hoz és kattintás
+            document.body.appendChild(link);
             link.click();
+            document.body.removeChild(link);
+            
+            // URL cleanup
+            setTimeout(() => URL.revokeObjectURL(link.href), 100);
         }
 
         // Összes kategória kijelölése
