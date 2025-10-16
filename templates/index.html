@@ -804,7 +804,7 @@
             renderPagination();
         }
 
-        // Pagináció
+        // Modern pagináció előző/következő gombokkal
         function renderPagination() {
             const totalPages = Math.ceil(filteredJobs.length / jobsPerPage);
             const container = document.getElementById('pagination');
@@ -812,17 +812,94 @@
 
             if (totalPages <= 1) return;
 
-            for (let i = 1; i <= totalPages; i++) {
-                const li = document.createElement('li');
-                li.className = `page-item ${i === currentPage ? 'active' : ''}`;
-                li.innerHTML = `<a class="page-link" href="#" data-page="${i}">${i}</a>`;
-                li.addEventListener('click', (e) => {
+            // Előző gomb
+            const prevLi = document.createElement('li');
+            prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+            prevLi.innerHTML = `
+                <a class="page-link" href="#" data-page="${currentPage - 1}">
+                    <i class="fas fa-chevron-left"></i> Előző
+                </a>
+            `;
+            if (currentPage > 1) {
+                prevLi.addEventListener('click', (e) => {
                     e.preventDefault();
-                    currentPage = i;
+                    currentPage--;
                     renderJobs();
                 });
-                container.appendChild(li);
             }
+            container.appendChild(prevLi);
+
+            // Oldalszámok intelligens megjelenítése
+            const maxVisiblePages = 7;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            // Ha a végén vagyunk, kezdjük korábban
+            if (endPage - startPage < maxVisiblePages - 1) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+
+            // Első oldal + ellipsis
+            if (startPage > 1) {
+                const firstLi = createPageItem(1);
+                container.appendChild(firstLi);
+                
+                if (startPage > 2) {
+                    const ellipsisLi = document.createElement('li');
+                    ellipsisLi.className = 'page-item disabled';
+                    ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                    container.appendChild(ellipsisLi);
+                }
+            }
+
+            // Látható oldalak
+            for (let i = startPage; i <= endPage; i++) {
+                const pageLi = createPageItem(i);
+                container.appendChild(pageLi);
+            }
+
+            // Ellipsis + utolsó oldal
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const ellipsisLi = document.createElement('li');
+                    ellipsisLi.className = 'page-item disabled';
+                    ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                    container.appendChild(ellipsisLi);
+                }
+                
+                const lastLi = createPageItem(totalPages);
+                container.appendChild(lastLi);
+            }
+
+            // Következő gomb
+            const nextLi = document.createElement('li');
+            nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+            nextLi.innerHTML = `
+                <a class="page-link" href="#" data-page="${currentPage + 1}">
+                    Következő <i class="fas fa-chevron-right"></i>
+                </a>
+            `;
+            if (currentPage < totalPages) {
+                nextLi.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    currentPage++;
+                    renderJobs();
+                });
+            }
+            container.appendChild(nextLi);
+        }
+
+        // Segédfüggvény oldal elemek létrehozásához
+        function createPageItem(pageNumber) {
+            const li = document.createElement('li');
+            li.className = `page-item ${pageNumber === currentPage ? 'active' : ''}`;
+            li.innerHTML = `<a class="page-link" href="#" data-page="${pageNumber}">${pageNumber}</a>`;
+            li.addEventListener('click', (e) => {
+                e.preventDefault();
+                currentPage = pageNumber;
+                renderJobs();
+            });
+            return li;
         }
 
         // Szűrők alkalmazása
