@@ -308,13 +308,39 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                     if link and not link.startswith("http"):
                         link = "https://www.profession.hu" + link
                     
-                    # Cég neve
-                    company_elem = card.select_one(".company, .employer, .company-name, .job-company")
-                    company = clean_text(company_elem.get_text()) if company_elem else ""
+                    # Cég neve - profession.hu specifikus szelektorok
+                    company_elem = card.select_one(".company-name, .employer-name, .job-company, .company, [data-company], .job-card-company")
+                    if not company_elem:
+                        # Fallback: keresés a szövegben
+                        card_text = card.get_text()
+                        if "Kft" in card_text or "Zrt" in card_text or "Nyrt" in card_text:
+                            # Regex keresés cégnevek után
+                            import re
+                            company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][a-záéíóöőúüű\s]+(?:Kft|Zrt|Nyrt|Bt|Kkt))', card_text)
+                            if company_match:
+                                company = company_match.group(1).strip()
+                            else:
+                                company = ""
+                        else:
+                            company = ""
+                    else:
+                        company = clean_text(company_elem.get_text())
                     
-                    # Lokáció
-                    location_elem = card.select_one(".location, .job-location, .city, .place")
-                    location = clean_text(location_elem.get_text()) if location_elem else ""
+                    # Lokáció - profession.hu specifikus szelektorok
+                    location_elem = card.select_one(".job-location, .location, .city, .place, [data-location], .job-card-location")
+                    if not location_elem:
+                        # Fallback: keresés a szövegben
+                        card_text = card.get_text()
+                        # Magyar városok keresése
+                        hungarian_cities = ["Budapest", "Debrecen", "Szeged", "Miskolc", "Pécs", "Győr", "Nyíregyháza", "Kecskemét", "Székesfehérvár", "Szombathely", "Szolnok", "Tatabánya", "Kaposvár", "Békéscsaba", "Zalaegerszeg", "Érd", "Sopron", "Veszprém", "Dunaújváros", "Hódmezővásárhely"]
+                        for city in hungarian_cities:
+                            if city in card_text:
+                                location = city
+                                break
+                        else:
+                            location = ""
+                    else:
+                        location = clean_text(location_elem.get_text())
                     
                     # Leírás
                     desc_elem = card.select_one(".description, .job-description, .summary, .excerpt")
