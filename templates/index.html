@@ -336,6 +336,9 @@
                     <button class="btn btn-primary" id="search-btn" disabled>
                         <i class="fas fa-search me-2"></i>Keresés
                     </button>
+                    <button class="btn btn-success ms-2" id="search-new-btn" disabled>
+                        <i class="fas fa-clock me-2"></i>Új állások
+                    </button>
                     <button class="btn btn-outline-secondary ms-2" id="clear-btn">
                         <i class="fas fa-times me-2"></i>Törlés
                     </button>
@@ -711,8 +714,9 @@
                 checkbox.checked = true;
             }
 
-            // Keresés gomb engedélyezése
+            // Keresés gombok engedélyezése
             document.getElementById('search-btn').disabled = selectedCategories.length === 0;
+            document.getElementById('search-new-btn').disabled = selectedCategories.length === 0;
             updateStats();
         }
 
@@ -738,6 +742,21 @@
             document.getElementById('search-btn').disabled = true;
             document.getElementById('search-btn').innerHTML = '<span class="loading-spinner me-2"></span>Keresés...';
 
+            // Progress bar inicializálása
+            let progressInterval;
+            let currentProgress = 0;
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            
+            // Progress bar animáció
+            progressInterval = setInterval(() => {
+                currentProgress += Math.random() * 3; // 0-3% véletlenszerű növekedés
+                if (currentProgress > 95) currentProgress = 95; // Maximum 95%-ig
+                
+                progressBar.style.width = currentProgress + '%';
+                progressText.textContent = `Scraping oldalak... ${Math.round(currentProgress)}%`;
+            }, 500);
+
             try {
                 const response = await fetch('/api/search', {
                     method: 'POST',
@@ -750,6 +769,11 @@
                 });
 
                 const result = await response.json();
+                
+                // Progress bar befejezése
+                clearInterval(progressInterval);
+                progressBar.style.width = '100%';
+                progressText.textContent = 'Keresés befejezve!';
                 
                 if (result.error) {
                     alert(result.error);
@@ -1155,6 +1179,7 @@
                 checkbox.checked = true;
             });
             document.getElementById('search-btn').disabled = false;
+            document.getElementById('search-new-btn').disabled = false;
             updateStats();
         }
 
@@ -1171,8 +1196,100 @@
             });
         }
 
+        // Új állások keresése
+        async function startNewSearch() {
+            if (selectedCategories.length === 0) return;
+
+            // UI frissítése
+            showProgress();
+            document.getElementById('loading-spinner').style.display = 'block';
+            document.getElementById('jobs-list').style.display = 'none';
+            document.getElementById('search-new-btn').disabled = true;
+            document.getElementById('search-new-btn').innerHTML = '<span class="loading-spinner me-2"></span>Új állások...';
+
+            // Progress bar inicializálása
+            let progressInterval;
+            let currentProgress = 0;
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            
+            // Progress bar animáció
+            progressInterval = setInterval(() => {
+                currentProgress += Math.random() * 5; // Gyorsabb növekedés új állásokhoz
+                if (currentProgress > 95) currentProgress = 95;
+                
+                progressBar.style.width = currentProgress + '%';
+                progressText.textContent = `Új állások keresése... ${Math.round(currentProgress)}%`;
+            }, 300);
+
+            try {
+                const response = await fetch('/api/search/new', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        categories: selectedCategories
+                    })
+                });
+
+                const result = await response.json();
+                
+                // Progress bar befejezése
+                clearInterval(progressInterval);
+                progressBar.style.width = '100%';
+                progressText.textContent = 'Új állások keresése befejezve!';
+                
+                if (result.error) {
+                    alert(result.error);
+                    document.getElementById('progress-container').style.display = 'none';
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    document.getElementById('search-new-btn').disabled = false;
+                    return;
+                }
+
+                // Debug: teljes válasz kiírása
+                console.log('Új állások API válasz:', result);
+                
+                // Valódi adatok használata
+                if (result.jobs && result.jobs.length > 0) {
+                    allJobs = result.jobs;
+                    filteredJobs = [...allJobs];
+                    
+                    document.getElementById('progress-container').style.display = 'none';
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    document.getElementById('results-container').style.display = 'block';
+                    document.getElementById('search-new-btn').disabled = false;
+                    
+                    renderJobs();
+                    updateResultsCount();
+                    
+                    console.log(`✅ Új állások: ${result.total_jobs} állás`);
+                    
+                    // Keresési előzmények mentése
+                    saveSearchToHistory(result);
+                } else {
+                    console.log('❌ Nincs új állás');
+                    alert('Nincs új állás ma!');
+                    document.getElementById('progress-container').style.display = 'none';
+                    document.getElementById('loading-spinner').style.display = 'none';
+                    document.getElementById('search-new-btn').disabled = false;
+                }
+                
+            } catch (error) {
+                console.error('Új állások keresési hiba:', error);
+                clearInterval(progressInterval);
+                document.getElementById('progress-container').style.display = 'none';
+                document.getElementById('loading-spinner').style.display = 'none';
+                document.getElementById('search-new-btn').disabled = false;
+                document.getElementById('search-new-btn').innerHTML = '<i class="fas fa-clock me-2"></i>Új állások';
+                alert('Hiba az új állások keresésekor: ' + error.message);
+            }
+        }
+
         // Event listeners
         document.getElementById('search-btn').addEventListener('click', startSearch);
+        document.getElementById('search-new-btn').addEventListener('click', startNewSearch);
         document.getElementById('select-all-btn').addEventListener('click', selectAllCategories);
         document.getElementById('select-all-portals-btn').addEventListener('click', selectAllPortals);
         document.getElementById('clear-btn').addEventListener('click', () => {
@@ -1184,6 +1301,7 @@
                 checkbox.checked = false;
             });
             document.getElementById('search-btn').disabled = true;
+            document.getElementById('search-new-btn').disabled = true;
             updateStats();
         });
 
