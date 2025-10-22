@@ -195,46 +195,154 @@ def is_probably_dev(title: str, desc: str) -> bool:
         return False
     return True
 
+def parse_publication_date(date_str: str):
+    """Publikálási dátum feldolgozása ISO formátumra"""
+    if not date_str:
+        return None, False
+    
+    date_str = date_str.strip().lower()
+    
+    # "Friss" esetén
+    if "friss" in date_str:
+        return datetime.today().strftime("%Y-%m-%d"), True
+    
+    # Magyar dátum formátumok
+    import re
+    from datetime import datetime, timedelta
+    
+    # 2025. október 20. formátum
+    match = re.search(r'(\d{4})\.\s*(\w+)\s*(\d{1,2})\.', date_str)
+    if match:
+        year, month_name, day = match.groups()
+        month_map = {
+            'január': 1, 'február': 2, 'március': 3, 'április': 4,
+            'május': 5, 'június': 6, 'július': 7, 'augusztus': 8,
+            'szeptember': 9, 'október': 10, 'november': 11, 'december': 12
+        }
+        if month_name in month_map:
+            try:
+                date_obj = datetime(int(year), month_map[month_name], int(day))
+                return date_obj.strftime("%Y-%m-%d"), False
+            except ValueError:
+                pass
+    
+    # 2025-10-20 formátum
+    match = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_str)
+    if match:
+        year, month, day = match.groups()
+        try:
+            date_obj = datetime(int(year), int(month), int(day))
+            return date_obj.strftime("%Y-%m-%d"), False
+        except ValueError:
+            pass
+    
+    # 20. október 2025 formátum
+    match = re.search(r'(\d{1,2})\.\s*(\w+)\s*(\d{4})', date_str)
+    if match:
+        day, month_name, year = match.groups()
+        month_map = {
+            'január': 1, 'február': 2, 'március': 3, 'április': 4,
+            'május': 5, 'június': 6, 'július': 7, 'augusztus': 8,
+            'szeptember': 9, 'október': 10, 'november': 11, 'december': 12
+        }
+        if month_name in month_map:
+            try:
+                date_obj = datetime(int(year), month_map[month_name], int(day))
+                return date_obj.strftime("%Y-%m-%d"), False
+            except ValueError:
+                pass
+    
+    # Ha nem sikerült feldolgozni, ma dátumot adunk vissza
+    return datetime.today().strftime("%Y-%m-%d"), False
+
 def get_total_pages(source_name: str, url: str):
-    """Get total number of pages for a search"""
+    """Get total number of pages for a search - dinamikus meghatározás"""
+    print(f"[DEBUG] get_total_pages hivasa: {source_name} - {url}")
     try:
         session = requests.Session()
         session.headers.update(HEADERS)
         
+        # Első oldal lekérése
         r = session.get(url, timeout=30)
         r.raise_for_status()
+        r.encoding = "utf-8"
         
         soup = BeautifulSoup(r.content, 'html.parser')
         
-        # Find pagination info
-        pagination = soup.find('div', class_='pagination') or soup.find('nav', class_='pagination')
-        if pagination:
-            # Look for last page number
-            last_page_links = pagination.find_all('a', href=True)
-            if last_page_links:
-                # Get the last page number from href
-                last_href = last_page_links[-1]['href']
-                if 'page=' in last_href:
-                    page_num = int(last_href.split('page=')[1].split('&')[0])
-                    print(f"📄 {source_name} - Összesen {page_num} oldal található")
-                    return page_num
+        # 1. Keresés pagination elemekben
+        pagination_selectors = [
+            'div.pager', 'nav.pager', '.pager',  # Profession.hu specifikus
+            'div.pagination', 'nav.pagination', '.pagination', 
+            'ul.pagination', 'ol.pagination'
+        ]
         
-        # Fallback: count job cards and estimate pages
-        job_cards = soup.find_all('li', class_='job-card')
-        if not job_cards:
-            job_cards = soup.find_all('div', class_='job-card')
+        for selector in pagination_selectors:
+            pagination = soup.select_one(selector)
+            if pagination:
+                print(f"[DEBUG] Pagination elem találva: {selector}")
+                
+                # Keresés utolsó oldal linkjében
+                page_links = pagination.find_all('a', href=True)
+                if page_links:
+                    # Utolsó link href-jéből oldalszám kinyerése
+                    last_href = page_links[-1].get('href', '')
+                    print(f"[DEBUG] Utolsó pagination link: {last_href}")
+                    
+                    # Profession.hu formátum: /OLDALSZÁM,10
+                    if '/,' in last_href:
+                        try:
+                            page_num = int(last_href.split('/')[-1].split(',')[0])
+                            print(f"[SUCCESS] {source_name} - Dinamikus oldalszám: {page_num} oldal")
+                            return page_num
+                        except (ValueError, IndexError):
+                            pass
+                    
+                    # Standard formátum: ?page=N vagy &page=N
+                    if 'page=' in last_href:
+                        try:
+                            page_num = int(last_href.split('page=')[1].split('&')[0].split('#')[0])
+                            print(f"[SUCCESS] {source_name} - Dinamikus oldalszám: {page_num} oldal")
+                            return page_num
+                        except (ValueError, IndexError):
+                            pass
+                
+                # Fallback: span elemekben keresés (ha nincs link)
+                page_spans = pagination.find_all('span')
+                if page_spans:
+                    max_page = 0
+                    for span in page_spans:
+                        span_text = span.get_text(strip=True)
+                        if span_text.isdigit():
+                            max_page = max(max_page, int(span_text))
+                    if max_page > 0:
+                        print(f"[SUCCESS] {source_name} - Dinamikus oldalszám (span): {max_page} oldal")
+                        return max_page
         
-        if job_cards:
-            # Assume 20 jobs per page
-            estimated_pages = max(1, len(job_cards) // 20)
-            print(f"📄 {source_name} - Becsült oldalszám: {estimated_pages} (alapján: {len(job_cards)} job card)")
+        # 2. Fallback: job card szám alapján becslés
+        job_selectors = [
+            'li.card.job-card', 'ul.job-cards li', '.job-card', 
+            '.job-item', '.listing-item', '.search-result-item'
+        ]
+        
+        total_jobs = 0
+        for selector in job_selectors:
+            job_cards = soup.select(selector)
+            if job_cards:
+                total_jobs = len(job_cards)
+                break
+        
+        if total_jobs > 0:
+            # Becslés: ~13-15 állás/oldal (Profession.hu átlag)
+            estimated_pages = max(1, (total_jobs + 12) // 13)  # Felfelé kerekítés
+            print(f"[ESTIMATE] {source_name} - Becsült oldalszám: {estimated_pages} (alapján: {total_jobs} job card)")
             return estimated_pages
         
-        print(f"📄 {source_name} - Nem található pagination, 1 oldal használata")
+        # 3. Fallback: 1 oldal
+        print(f"[FALLBACK] {source_name} - Nem található pagination, 1 oldal használata")
         return 1
         
     except Exception as e:
-        print(f"⚠️ {source_name} - Oldalszám meghatározási hiba: {e}, 1 oldal használata")
+        print(f"[WARNING] {source_name} - Oldalszám meghatározási hiba: {e}, 1 oldal használata")
         return 1
 
 def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
@@ -247,17 +355,27 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
     if max_pages is None:
         max_pages = get_total_pages(source_name, url)
     
-    # Limit to reasonable maximum
-    max_pages = min(max_pages, 50)  # Safety limit
+    # Dinamikus limit - mindig annyi oldal amennyi van
+    # Csak biztonsági limit: maximum 200 oldal (védés a végtelen ciklus ellen)
+    max_pages = min(max_pages, 200)  # Biztonsági limit
     
-    print(f"🔍 {source_name} - {max_pages} oldal feldolgozása")
+    print(f"[INFO] {source_name} - {max_pages} oldal feldolgozása")
     
     all_items = []
     
     for page in range(1, max_pages + 1):
         try:
-            # Oldalszámozás hozzáadása
-            page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
+            # Oldalszámozás hozzáadása - Profession.hu formátum: /OLDALSZÁM,10
+            if '/1,10' in url:
+                page_url = url.replace('/1,10', f'/{page},10')
+            elif '&page=' in url or '?page=' in url:
+                page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
+            else:
+                page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
+            
+            # Debug: URL ellenőrzés
+            if page <= 3:  # Csak az első 3 oldalról debug
+                print(f"   [DEBUG] Oldal {page} URL: {page_url}")
             
             # Retry logika timeout esetén
             max_retries = 5
@@ -269,10 +387,10 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                 except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError, requests.exceptions.RequestException) as e:
                     if retry < max_retries - 1:
                         wait_time = (retry + 1) * 10
-                        print(f"   ⚠️ Error, retry {retry + 1}/{max_retries} in {wait_time}s: {e}")
+                        print(f"   [WARNING] Error, retry {retry + 1}/{max_retries} in {wait_time}s: {e}")
                         time.sleep(wait_time)
                     else:
-                        print(f"   ❌ Max retries reached, skipping page {page}")
+                        print(f"   [ERROR] Max retries reached, skipping page {page}")
                         raise e
             r.encoding = "utf-8"
             
@@ -293,7 +411,7 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
             
             if not job_cards:
                 # Ha nincs több állás, szakítsuk meg
-                print(f"   ⏹️ Nincs több állás az oldalon, leállítás")
+                print(f"   [STOP] Nincs több állás az oldalon, leállítás")
                 break
             
             for card in job_cards:
@@ -311,18 +429,31 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                     # Cég neve - profession.hu specifikus szelektorok
                     company_elem = card.select_one(".company-name, .employer-name, .job-company, .company, [data-company], .job-card-company")
                     if not company_elem:
-                        # Fallback: keresés a szövegben
+                        # Fallback: keresés a szövegben - fejlettebb regex
                         card_text = card.get_text()
-                        if "Kft" in card_text or "Zrt" in card_text or "Nyrt" in card_text:
-                            # Regex keresés cégnevek után
-                            import re
-                            company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][a-záéíóöőúüű\s]+(?:Kft|Zrt|Nyrt|Bt|Kkt))', card_text)
+                        import re
+                        
+                        # 1. Keresés cégnevek után (Kft, Zrt, stb.)
+                        company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][a-zA-ZÁÉÍÓÖŐÚÜŰáéíóöőúüű\s&.,-]+(?:Kft|Zrt|Nyrt|Bt|Kkt|Ltd|Corp|Inc|Hungary|Services|Solutions|Technologies|Systems|Group|Consulting|Software|Digital|IT|Tech))', card_text)
+                        if company_match:
+                            company = company_match.group(1).strip()
+                        else:
+                            # 2. Keresés nagybetűs szavak után (pl. "TATA Consultancy Services Hungary")
+                            company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][A-ZÁÉÍÓÖŐÚÜŰa-záéíóöőúüű\s&.,-]+(?:Hungary|Services|Solutions|Technologies|Systems|Group|Consulting|Software|Digital|IT|Tech|Corp|Inc|Ltd))', card_text)
                             if company_match:
                                 company = company_match.group(1).strip()
                             else:
-                                company = ""
-                        else:
-                            company = ""
+                                # 3. Keresés tipikus cégnevek után
+                                company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][a-zA-ZÁÉÍÓÖŐÚÜŰáéíóöőúüű\s&.,-]{3,})', card_text)
+                                if company_match:
+                                    potential_company = company_match.group(1).strip()
+                                    # Ellenőrizzük, hogy nem pozíció cím
+                                    if not any(word in potential_company.lower() for word in ['developer', 'engineer', 'manager', 'analyst', 'specialist', 'consultant', 'architect']):
+                                        company = potential_company
+                                    else:
+                                        company = ""
+                                else:
+                                    company = ""
                     else:
                         company = clean_text(company_elem.get_text())
                     
@@ -350,6 +481,9 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                     date_elem = card.select_one(".date, .published, .job-date, .time")
                     pub_date = clean_text(date_elem.get_text()) if date_elem else ""
                     
+                    # Dátum feldolgozás - ISO formátumra konvertálás
+                    pub_date_iso, is_fresh = parse_publication_date(pub_date)
+                    
                     if title and link:
                         all_items.append({
                             "Forrás": source_name, 
@@ -357,6 +491,8 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                             "Link": link, 
                             "Leírás": desc,
                             "Publikálva": pub_date,
+                            "Publikálva_dátum": pub_date_iso,
+                            "Friss_állás": is_fresh,
                             "Cég": company,
                             "Lokáció": location
                         })
@@ -685,64 +821,15 @@ def search_jobs():
         all_rows = []
         seen_links = set()
         
-        # Turbó kulcsszavas keresés - minden kulcsszóhoz külön keresés
+        # Csak IT főkategória - duplikáció nélkül, maximalizált lefedettség
         search_queries = []
         
-        # Alap IT főoldal - teljes lefedettség (575+ állás = ~40 oldal, jövőbeli növekedésre)
-        search_queries.append(("Profession – IT főoldal", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10"))
+        # IT főkategória - 900+ állás elérése (70+ oldal)
+        search_queries.append(("Profession – IT főkategória", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10"))
         
-        # Kiegészítő kulcsszavak - csak a nagy találatszámúak (20 oldal)
-        high_volume_keywords = [
-            # Legnagyobb találatszámú pozíciók
-            "fejlesztő", "programozó", "szoftver", "szoftvermérnök", "rendszermérnök",
-            "szoftvertesztelő", "tesztelő", "QA",
-            # Legnagyobb találatszámú technológiák
-            "frontend", "backend", "full stack", "fullstack", "web fejlesztő",
-            "react", "angular", "vue", "javascript", "typescript", "node.js",
-            "python", "java", "c#", "php", "ruby", "go",
-            "spring", "django", "flask", "laravel", "express",
-            "devops", "data scientist", "data engineer", "database", "sql", "nosql",
-            "docker", "kubernetes", "aws", "azure", "gcp", "terraform",
-            "mobile", "ios", "android", "flutter", "react native"
-        ]
-        
-        # Közepes találatszámú kulcsszavak (10 oldal)
-        medium_volume_keywords = [
-            "quality assurance", "rust", "machine learning", "AI", "artificial intelligence", "blockchain"
-        ]
-        
-        # Nagy találatszámú kulcsszavak (20 oldal)
-        for keyword in high_volume_keywords:
-            if keyword in ALL_KEYWORDS:
-                search_queries.append((f"Profession – {keyword}", f"https://www.profession.hu/allasok/1,0,0,{quote(keyword, safe='')}"))
-        
-        # Közepes találatszámú kulcsszavak (10 oldal)
-        for keyword in medium_volume_keywords:
-            if keyword in ALL_KEYWORDS:
-                search_queries.append((f"Profession – {keyword}", f"https://www.profession.hu/allasok/1,0,0,{quote(keyword, safe='')}"))
-        
-        # Alternatív megközelítés: teljes lefedettség
-        alternative_searches = [
-            # Különböző pozíciók
-            ("Profession – IT Manager", "https://www.profession.hu/allasok/1,0,0,it%20manager"),
-            ("Profession – System Admin", "https://www.profession.hu/allasok/1,0,0,rendszergazda"),
-            ("Profession – Project Manager", "https://www.profession.hu/allasok/1,0,0,projekt%20menedzser"),
-            ("Profession – Product Manager", "https://www.profession.hu/allasok/1,0,0,product%20manager"),
-            # Különböző technológiák
-            ("Profession – Docker", "https://www.profession.hu/allasok/1,0,0,docker"),
-            ("Profession – AWS", "https://www.profession.hu/allasok/1,0,0,aws"),
-            ("Profession – SQL", "https://www.profession.hu/allasok/1,0,0,sql"),
-            ("Profession – Linux", "https://www.profession.hu/allasok/1,0,0,linux"),
-            ("Profession – Git", "https://www.profession.hu/allasok/1,0,0,git"),
-            ("Profession – API", "https://www.profession.hu/allasok/1,0,0,api")
-        ]
-        
-        for name, url in alternative_searches:
-            search_queries.append((name, url))
-        
-        print(f"🔍 Összesen {len(search_queries)} kulcsszavas keresés (dinamikus oldalszám)")
-        print(f"📝 Kulcsszavak: {len(high_volume_keywords)} nagy találat + {len(medium_volume_keywords)} közepes + {len(alternative_searches)} alternatív")
-        print(f"🎯 Dinamikus oldalszám - automatikusan meghatározza a teljes oldalszámot minden kereséshez")
+        print(f"[INFO] Csak IT főkategória használata - {len(search_queries)} keresés")
+        print(f"[INFO] Cél: 900+ állás elérése duplikáció nélkül")
+        print(f"[INFO] Dinamikus oldalszám - automatikusan meghatározza a teljes oldalszámot")
         
         sess = requests.Session()
         
@@ -754,7 +841,7 @@ def search_jobs():
             try:
                 # Progress tracking
                 progress = (i / total_queries) * 100
-                print(f"📊 Progress: {progress:.1f}% - {name}")
+                print(f"[STATS] Progress: {progress:.1f}% - {name}")
                 
                 # URL meghatározása
                 if keyword_or_url.startswith("http"):
@@ -772,19 +859,19 @@ def search_jobs():
                     url = f"https://www.profession.hu/allasok/1,0,0,{quote(keyword_or_url, safe='')}"
                     # Dinamikus oldalszám - automatikusan meghatározza a teljes oldalszámot
                     items = fetch_html_jobs(name, url)
-                print(f"🔎 {name} - {len(items)} állás")
+                print(f"[SEARCH] {name} - {len(items)} állás")
                 
                 # Debug: első néhány link ellenőrzése
                 if items:
                     sample_links = [item["Link"] for item in items[:3]]
                     print(f"   Sample links: {sample_links}")
-                    print(f"   📊 Eredeti állások száma: {len(items)}")
+                    print(f"   [STATS] Eredeti állások száma: {len(items)}")
                     if "it-programozas-fejlesztes" in url:
-                        print(f"   🎯 IT főoldal - várható ~575+ állás (40 oldal)")
+                        print(f"   [TARGET] IT főkategória - dinamikus oldalszám meghatározás")
                     elif "python" in url.lower():
-                        print(f"   🐍 Python keresés - várható ~180 állás (15 oldal)")
+                        print(f"   [PYTHON] Python keresés - várható ~180 állás (15 oldal)")
                 else:
-                    print(f"   ⚠️ Nincs állás ebben a feed-ben: {url}")
+                    print(f"   [WARNING] Nincs állás ebben a feed-ben: {url}")
                 
                 kept = 0
                 skipped = 0
@@ -810,6 +897,10 @@ def search_jobs():
                     # HTML scraping-ből már van cég és lokáció
                     company = it.get("Cég", "") or parse_company_from_summary(desc) or "N/A"
                     location = it.get("Lokáció", "") or "N/A"
+                    
+                    # Dátum információk
+                    pub_date_iso = it.get("Publikálva_dátum", "")
+                    is_fresh = it.get("Friss_állás", False)
 
                     seen_links.add(clean_link)
                     all_rows.append({
@@ -820,6 +911,8 @@ def search_jobs():
                         "lokacio": location or "N/A",
                         "link": link,  # Eredeti linket tároljuk
                         "publikalva": it["Publikálva"],
+                        "publikalva_datum": pub_date_iso or datetime.today().strftime("%Y-%m-%d"),
+                        "friss_allas": is_fresh,
                         "lekeres_datuma": datetime.today().strftime("%Y-%m-%d"),
                         "leiras": (desc[:200] if isinstance(desc, str) else "")
                     })
@@ -831,31 +924,31 @@ def search_jobs():
                 per_source_kept[name] = kept
                 per_source_skipped[name] = skipped
                 
-                print(f"   ✅ Megtartva: {kept}, Kihagyva: {skipped}")
+                print(f"   [SUCCESS] Megtartva: {kept}, Kihagyva: {skipped}")
                 
                 # Debug: részletes szűrési statisztikák
                 if items:
-                    print(f"   📊 Feldolgozott: {len(items)} állás")
-                    print(f"   🔗 Egyedi linkek: {len(seen_links)}")
-                    print(f"   ✅ Megtartva: {kept}")
-                    print(f"   ❌ Kihagyva: {skipped}")
+                    print(f"   [STATS] Feldolgozott: {len(items)} állás")
+                    print(f"   [LINKS] Egyedi linkek: {len(seen_links)}")
+                    print(f"   [SUCCESS] Megtartva: {kept}")
+                    print(f"   [ERROR] Kihagyva: {skipped}")
                     if skipped > 0:
-                        print(f"   🔍 Kihagyás okai: duplikáció vagy nem fejlesztői")
+                        print(f"   [INFO] Kihagyás okai: duplikáció vagy nem fejlesztői")
                 elif skipped > kept:
-                    print(f"   ⚠️ Sok duplikáció - valószínűleg ugyanazok az állások különböző kulcsszavakkal")
+                    print(f"   [WARNING] Sok duplikáció - valószínűleg ugyanazok az állások különböző kulcsszavakkal")
                 
                 # Progress mentés (ha megszakad, legalább ezek megmaradnak)
                 if len(all_rows) > 0:
                     global scraped_jobs
                     scraped_jobs = all_rows
-                    print(f"💾 Mentett állások: {len(all_rows)} (folyamatban)")
-                    print(f"📊 Progress: {((i+1) / total_queries) * 100:.1f}% - {len(all_rows)} állás eddig")
+                    print(f"[SAVED] Mentett állások: {len(all_rows)} (folyamatban)")
+                    print(f"[STATS] Progress: {((i+1) / total_queries) * 100:.1f}% - {len(all_rows)} állás eddig")
                 
                 # Kímélet a szerver felé (feedek között - csökkentett delay)
                 time.sleep(2.0)
 
             except Exception as e:
-                print(f"⚠️ Kihagyva ({name}): {str(e)}")
+                print(f"[WARNING] Kihagyva ({name}): {str(e)}")
                 print(f"   Error type: {type(e).__name__}")
                 import traceback
                 print(f"   Traceback: {traceback.format_exc()}")
@@ -865,14 +958,14 @@ def search_jobs():
         scraped_jobs = all_rows
         
         # Progress mentés (ha megszakad, legalább ezek megmaradnak)
-        print(f"💾 Mentett állások: {len(all_rows)}")
+        print(f"[SAVED] Mentett állások: {len(all_rows)}")
         
-        print(f"\n✅ {len(all_rows)} fejlesztői állás találva, {len(search_queries)} kulcsszóval")
-        print(f"📈 Összesen {len(seen_links)} egyedi állás link")
-        print(f"🎯 VISSZAADOTT ÁLLÁSOK: {len(all_rows)} (összes)")
+        print(f"\n[SUCCESS] {len(all_rows)} fejlesztői állás találva, {len(search_queries)} kulcsszóval")
+        print(f"[TOTAL] Összesen {len(seen_links)} egyedi állás link")
+        print(f"[TARGET] VISSZAADOTT ÁLLÁSOK: {len(all_rows)} (összes)")
         
         # Top források statisztikája
-        print("\n📊 Forrásösszegzés (megtartott / kihagyott):")
+        print("\n[STATS] Forrásösszegzés (megtartott / kihagyott):")
         sorted_sources = sorted(per_source_kept.items(), key=lambda x: x[1], reverse=True)[:15]
         for name, kept in sorted_sources:
             print(f"  • {name}: {kept} / {per_source_skipped[name]}")
@@ -881,7 +974,7 @@ def search_jobs():
         total_processed = sum(per_source_kept.values()) + sum(per_source_skipped.values())
         total_duplicates = sum(per_source_skipped.values())
         duplicate_rate = (total_duplicates / total_processed * 100) if total_processed > 0 else 0
-        print(f"\n🔄 Duplikáció arány: {duplicate_rate:.1f}% ({total_duplicates}/{total_processed})")
+        print(f"\n[DUP] Duplikáció arány: {duplicate_rate:.1f}% ({total_duplicates}/{total_processed})")
         
         return jsonify({
             "message": "Turbó keresés befejezve", 
@@ -904,6 +997,133 @@ def search_jobs():
 def get_progress():
     # Egyszerűsített progress - valós implementációban session/task ID kellene
     return jsonify({"progress": 0, "status": "Keresés..."})
+
+@app.route('/api/search/new', methods=['POST'])
+def search_new_jobs():
+    """Csak az új állások keresése (ma publikáltak)"""
+    try:
+        data = request.json
+        selected_categories = data.get('categories', [])
+        
+        if not selected_categories:
+            return jsonify({"error": "Válassz legalább egy kategóriát!"}), 400
+        
+        # Ugyanaz a keresési logika, mint a normál keresésben
+        all_rows = []
+        seen_links = set()
+        
+        # Csak IT főkategória - duplikáció nélkül, maximalizált lefedettség
+        search_queries = []
+        search_queries.append(("Profession – IT főkategória", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10"))
+        
+        print(f"[INFO] Új állások keresése - {len(search_queries)} keresés")
+        
+        sess = requests.Session()
+        per_source_kept = defaultdict(int)
+        per_source_skipped = defaultdict(int)
+        
+        total_queries = len(search_queries)
+        for i, (name, keyword_or_url) in enumerate(search_queries):
+            try:
+                # Progress tracking
+                progress = (i / total_queries) * 100
+                print(f"[STATS] Progress: {progress:.1f}% - {name}")
+                
+                # URL meghatározása
+                if keyword_or_url.startswith("http"):
+                    url = keyword_or_url
+                    items = fetch_html_jobs(name, url)
+                else:
+                    url = f"https://www.profession.hu/allasok/1,0,0,{quote(keyword_or_url, safe='')}"
+                    items = fetch_html_jobs(name, url)
+                
+                print(f"[SEARCH] {name} - {len(items)} állás")
+                
+                kept = 0
+                skipped = 0
+                today = datetime.today().strftime("%Y-%m-%d")
+                
+                for it in items:
+                    link = it["Link"]
+                    if not link:
+                        skipped += 1
+                        continue
+
+                    # Duplikáció ellenőrzés
+                    clean_link = link.split('?')[0]
+                    if clean_link in seen_links:
+                        skipped += 1
+                        continue
+
+                    title = it["Pozíció"]
+                    desc = it["Leírás"]
+                    if not is_probably_dev(title, desc):
+                        skipped += 1
+                        continue
+
+                    # ÚJ SZŰRÉS: Csak a mai állások
+                    pub_date_iso = it.get("Publikálva_dátum", "")
+                    is_fresh = it.get("Friss_állás", False)
+                    
+                    if not (pub_date_iso == today or is_fresh):
+                        skipped += 1
+                        continue
+
+                    # HTML scraping-ből már van cég és lokáció
+                    company = it.get("Cég", "") or parse_company_from_summary(desc) or "N/A"
+                    location = it.get("Lokáció", "") or "N/A"
+
+                    seen_links.add(clean_link)
+                    all_rows.append({
+                        "id": len(all_rows) + 1,
+                        "forras": it["Forrás"],
+                        "pozicio": title,
+                        "ceg": company or "N/A",
+                        "lokacio": location or "N/A",
+                        "link": link,
+                        "publikalva": it["Publikálva"],
+                        "publikalva_datum": pub_date_iso or today,
+                        "friss_allas": is_fresh,
+                        "lekeres_datuma": today,
+                        "leiras": (desc[:200] if isinstance(desc, str) else "")
+                    })
+                    kept += 1
+
+                per_source_kept[name] = kept
+                per_source_skipped[name] = skipped
+                
+                print(f"   [SUCCESS] Új állások: {kept}, Kihagyva: {skipped}")
+                
+                # Progress mentés
+                if len(all_rows) > 0:
+                    global scraped_jobs
+                    scraped_jobs = all_rows
+                    print(f"[SAVED] Mentett új állások: {len(all_rows)} (folyamatban)")
+                
+                time.sleep(2.0)
+
+            except Exception as e:
+                print(f"[WARNING] Kihagyva ({name}): {str(e)}")
+                continue
+        
+        # Globális változó frissítése
+        scraped_jobs = all_rows
+        
+        print(f"\n[SUCCESS] {len(all_rows)} új állás találva")
+        print(f"[TOTAL] Összesen {len(seen_links)} egyedi új állás link")
+        
+        return jsonify({
+            "message": "Új állások keresése befejezve", 
+            "total_jobs": len(all_rows),
+            "total_searches": len(search_queries),
+            "unique_links": len(seen_links),
+            "jobs": all_rows
+        })
+        
+    except Exception as e:
+        error_message = f"Új állások keresési hiba: {str(e)}"
+        print(f"NEW JOBS SEARCH ERROR: {error_message}")
+        return jsonify({"error": error_message}), 500
 
 # Globális változó a scraped adatok tárolásához
 scraped_jobs = []

@@ -176,15 +176,126 @@
             color: #6c757d;
             font-size: 0.875rem;
         }
+        
+        /* Dark mode styles */
+        body.dark-mode {
+            background-color: #1a1a1a !important;
+            color: #e9ecef !important;
+        }
+        
+        body.dark-mode .search-controls,
+        body.dark-mode .stat-card,
+        body.dark-mode .card {
+            background-color: #2d2d2d !important;
+            border-color: #404040 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.dark-mode .form-control,
+        body.dark-mode .form-select {
+            background-color: #3d3d3d !important;
+            border-color: #404040 !important;
+            color: #e9ecef !important;
+        }
+        
+        body.dark-mode .form-control:focus,
+        body.dark-mode .form-select:focus {
+            background-color: #3d3d3d !important;
+            border-color: #0d6efd !important;
+            color: #e9ecef !important;
+        }
+        
+        /* Job card hover effects */
+        .job-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .job-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+        }
+        
+        body.dark-mode .job-card:hover {
+            box-shadow: 0 8px 25px rgba(255,255,255,0.1) !important;
+        }
+        
+        /* Loading animation */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0d6efd;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Progress bar */
+        .progress-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background-color: rgba(0,0,0,0.1);
+            z-index: 9999;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #0d6efd, #6610f2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        /* Badge improvements */
+        .badge {
+            font-size: 0.75em;
+            padding: 0.5em 0.75em;
+        }
+        
+        /* Button improvements */
+        .btn {
+            transition: all 0.2s ease;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+        
+        /* Category and portal items */
+        .category-item, .portal-item {
+            transition: all 0.2s ease;
+        }
+        
+        .category-item:hover, .portal-item:hover {
+            transform: scale(1.02);
+        }
     </style>
 </head>
 <body class="bg-light">
+    <!-- Progress bar -->
+    <div class="progress-container" id="progress-container" style="display: none;">
+        <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    
     <nav class="navbar navbar-dark bg-primary">
         <div class="container">
             <span class="navbar-brand mb-0 h1">
                 <i class="fas fa-search me-2"></i>IT Álláskereső
             </span>
-            <span class="text-light">Profession.hu Scraper</span>
+            <div class="d-flex align-items-center">
+                <span class="text-light me-3">Profession.hu Scraper</span>
+                <button class="btn btn-outline-light btn-sm" id="dark-mode-toggle" title="Dark mode váltás">
+                    <i class="fas fa-moon" id="dark-mode-icon"></i>
+                </button>
+            </div>
         </div>
     </nav>
 
@@ -297,18 +408,26 @@
                         </h5>
                         <div>
                             <span class="badge bg-primary me-2" id="results-count">0 állás</span>
-                            <button class="btn btn-sm btn-outline-primary" id="export-csv">
-                                <i class="fas fa-download me-1"></i>CSV export
-                            </button>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-primary" id="export-csv">
+                                    <i class="fas fa-file-csv me-1"></i>CSV export
+                                </button>
+                                <button class="btn btn-sm btn-outline-success" id="export-excel">
+                                    <i class="fas fa-file-excel me-1"></i>Excel export
+                                </button>
+                                <button class="btn btn-sm btn-outline-info" id="export-excel-filtered">
+                                    <i class="fas fa-filter me-1"></i>Szűrt Excel
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">
                         <!-- Szűrők -->
                         <div class="row mb-3">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <input type="text" class="form-control" id="search-filter" placeholder="Pozíció vagy cég keresése...">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <select class="form-select" id="location-filter">
                                     <option value="">Minden lokáció</option>
                                     <option value="Budapest">Budapest</option>
@@ -316,20 +435,46 @@
                                     <option value="Szeged">Szeged</option>
                                     <option value="Győr">Győr</option>
                                     <option value="Pécs">Pécs</option>
+                                    <option value="Miskolc">Miskolc</option>
+                                    <option value="Kecskemét">Kecskemét</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <select class="form-select" id="work-type-filter">
+                                    <option value="">Minden munkavégzés</option>
+                                    <option value="Hibrid">Hibrid</option>
+                                    <option value="Remote">Remote</option>
+                                    <option value="Office">Office</option>
+                                    <option value="Távmunka">Távmunka</option>
+                                    <option value="Helyszíni">Helyszíni</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select class="form-select" id="salary-filter">
+                                    <option value="">Minden fizetés</option>
+                                    <option value="salary publicised">Fizetés megadva</option>
+                                    <option value="salary confidential">Fizetés titkos</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
                                 <select class="form-select" id="sort-filter">
                                     <option value="date">Publikálás dátuma</option>
                                     <option value="company">Cég neve</option>
                                     <option value="position">Pozíció neve</option>
+                                    <option value="salary">Fizetés</option>
                                 </select>
                             </div>
-                            <div class="col-md-2">
-                                <button class="btn btn-outline-secondary w-100" id="clear-filters">
+                            <div class="col-md-1">
+                                <button class="btn btn-outline-secondary w-100" id="clear-filters" title="Szűrők törlése">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
+                        </div>
+
+                        <!-- Loading spinner -->
+                        <div id="loading-spinner" class="text-center py-5" style="display: none;">
+                            <div class="loading-spinner mx-auto mb-3"></div>
+                            <p class="text-muted">Állások keresése...</p>
                         </div>
 
                         <!-- Eredmények listája -->
@@ -587,10 +732,11 @@
             if (selectedCategories.length === 0) return;
 
             // UI frissítése
-            document.getElementById('progress-container').style.display = 'block';
-            document.getElementById('results-container').style.display = 'none';
+            showProgress();
             document.getElementById('loading-spinner').style.display = 'block';
+            document.getElementById('jobs-list').style.display = 'none';
             document.getElementById('search-btn').disabled = true;
+            document.getElementById('search-btn').innerHTML = '<span class="loading-spinner me-2"></span>Keresés...';
 
             try {
                 const response = await fetch('/api/search', {
@@ -772,25 +918,27 @@
                         <div class="row">
                             <div class="col-md-8">
                                 <h6 class="card-title mb-1">
-                                    <a href="${job.Link || job.link || '#'}" target="_blank" class="text-decoration-none">
-                                        ${job.Pozíció || job.pozicio || job.title || 'N/A'}
+                                    <a href="${job.link || job.Link || '#'}" target="_blank" class="text-decoration-none">
+                                        ${job.pozicio || job.Pozíció || job.title || 'N/A'}
                                     </a>
                                 </h6>
                                 <p class="text-muted mb-2">
-                                    <i class="fas fa-building me-1"></i>${job.Cég || job.ceg || job.company || 'N/A'}
+                                    <i class="fas fa-building me-1"></i>${job.ceg || job.Cég || job.company || 'N/A'}
                                     <span class="ms-3">
-                                        <i class="fas fa-map-marker-alt me-1"></i>${job.Lokáció || job.lokacio || job.location || 'N/A'}
+                                        <i class="fas fa-map-marker-alt me-1"></i>${job.lokacio || job.Lokáció || job.location || 'N/A'}
                                     </span>
+                                    ${job.fizetes && job.fizetes !== 'N/A' ? `<span class="ms-3"><i class="fas fa-money-bill-wave me-1"></i>${job.fizetes}</span>` : ''}
+                                    ${job.munkavégzés_típusa && job.munkavégzés_típusa !== 'N/A' ? `<span class="ms-3"><i class="fas fa-laptop me-1"></i>${job.munkavégzés_típusa}</span>` : ''}
                                 </p>
                                 <p class="card-text small text-muted">${job.Leírás || job.leiras || job.description || 'N/A'}</p>
                             </div>
                             <div class="col-md-4 text-end">
                                 <small class="text-muted">
                                     <i class="fas fa-calendar me-1"></i>
-                                    ${job.Publikálva || job.publikalva || job.published || 'N/A'}
+                                    ${job.publikalva || job.Publikálva || job.published || 'N/A'}
                                 </small>
                                 <div class="mt-2">
-                                    <a href="${job.Link || job.link || '#'}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <a href="${job.link || job.Link || '#'}" target="_blank" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-external-link-alt me-1"></i>Megtekintés
                                     </a>
                                 </div>
@@ -909,9 +1057,9 @@
             const sortBy = document.getElementById('sort-filter').value;
 
             filteredJobs = allJobs.filter(job => {
-                const title = job.Pozíció || job.pozicio || job.title || '';
-                const company = job.Cég || job.ceg || job.company || '';
-                const location = job.Lokáció || job.lokacio || job.location || '';
+                const title = job.pozicio || job.Pozíció || job.title || '';
+                const company = job.ceg || job.Cég || job.company || '';
+                const location = job.lokacio || job.Lokáció || job.location || '';
                 
                 const matchesSearch = !searchTerm || 
                     title.toLowerCase().includes(searchTerm) ||
@@ -952,12 +1100,16 @@
             }
 
             const csvContent = [
-                ['Cég neve', 'Pozíció', 'Lokáció', 'Link', 'Hiring status', 'Relevancia', 'Kapcsolattartó', 'Lead score'],
+                ['Cég neve', 'Pozíció', 'Lokáció', 'Fizetés', 'Munkavégzés típusa', 'Cég mérete', 'Link', 'Publikálva', 'Hiring status', 'Relevancia', 'Kapcsolattartó', 'Lead score'],
                 ...filteredJobs.map(job => [
-                    job.Cég || job.ceg || job.company || 'N/A',
-                    job.Pozíció || job.pozicio || job.title || 'N/A',
-                    job.Lokáció || job.lokacio || job.location || 'N/A',
-                    job.Link || job.link || 'N/A',
+                    job.ceg || job.Cég || job.company || 'N/A',
+                    job.pozicio || job.Pozíció || job.title || 'N/A',
+                    job.lokacio || job.Lokáció || job.location || 'N/A',
+                    job.fizetes || 'N/A',
+                    job.munkavégzés_típusa || 'N/A',
+                    job.ceg_merete || 'N/A',
+                    job.link || job.Link || 'N/A',
+                    job.publikalva || job.Publikálva || 'N/A',
                     'Mixed/Unclear', // Hiring status
                     '', // Relevancia
                     '', // Kapcsolattartó
@@ -1037,17 +1189,194 @@
 
         document.getElementById('search-filter').addEventListener('input', applyFilters);
         document.getElementById('location-filter').addEventListener('change', applyFilters);
+        document.getElementById('work-type-filter').addEventListener('change', applyFilters);
+        document.getElementById('salary-filter').addEventListener('change', applyFilters);
         document.getElementById('sort-filter').addEventListener('change', applyFilters);
         document.getElementById('clear-filters').addEventListener('click', () => {
             document.getElementById('search-filter').value = '';
             document.getElementById('location-filter').value = '';
+            document.getElementById('work-type-filter').value = '';
+            document.getElementById('salary-filter').value = '';
             document.getElementById('sort-filter').value = 'date';
             applyFilters();
         });
 
         document.getElementById('export-csv').addEventListener('click', exportToCSV);
+        document.getElementById('export-excel').addEventListener('click', exportToExcel);
+        document.getElementById('export-excel-filtered').addEventListener('click', exportToExcelFiltered);
+
+        // Excel export funkciók
+        function exportToExcel() {
+            if (allJobs.length === 0) {
+                alert('Nincsenek adatok az exportáláshoz!');
+                return;
+            }
+            
+            // Excel export API hívás
+            fetch('/api/export/excel')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Excel export hiba');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `it_allasok_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Excel export hiba:', error);
+                    alert('Excel export sikertelen: ' + error.message);
+                });
+        }
+
+        function exportToExcelFiltered() {
+            if (filteredJobs.length === 0) {
+                alert('Nincsenek szűrt adatok az exportáláshoz!');
+                return;
+            }
+            
+            // Szűrési paraméterek összegyűjtése
+            const searchTerm = document.getElementById('search-filter').value;
+            const locationFilter = document.getElementById('location-filter').value;
+            const companyFilter = ''; // Ha lesz cég szűrő
+            const salaryFilter = ''; // Ha lesz fizetés szűrő
+            const workTypeFilter = ''; // Ha lesz munkavégzés típus szűrő
+            
+            // URL paraméterek összeállítása
+            const params = new URLSearchParams();
+            if (searchTerm) params.append('search', searchTerm);
+            if (locationFilter) params.append('location', locationFilter);
+            if (companyFilter) params.append('company', companyFilter);
+            if (salaryFilter) params.append('salary', salaryFilter);
+            if (workTypeFilter) params.append('work_type', workTypeFilter);
+            
+            // Excel szűrt export API hívás
+            fetch(`/api/export/excel/filtered?${params.toString()}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Szűrt Excel export hiba');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `it_allasok_szurt_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Szűrt Excel export hiba:', error);
+                    alert('Szűrt Excel export sikertelen: ' + error.message);
+                });
+        }
+
+        // Dark mode functionality
+        function toggleDarkMode() {
+            const body = document.body;
+            const icon = document.getElementById('dark-mode-icon');
+            
+            if (body.classList.contains('dark-mode')) {
+                body.classList.remove('dark-mode');
+                icon.className = 'fas fa-moon';
+                localStorage.setItem('darkMode', 'false');
+            } else {
+                body.classList.add('dark-mode');
+                icon.className = 'fas fa-sun';
+                localStorage.setItem('darkMode', 'true');
+            }
+        }
+
+        // Load dark mode preference
+        function loadDarkModePreference() {
+            const darkMode = localStorage.getItem('darkMode');
+            if (darkMode === 'true') {
+                document.body.classList.add('dark-mode');
+                document.getElementById('dark-mode-icon').className = 'fas fa-sun';
+            }
+        }
+
+        // Progress bar functions
+        function showProgress() {
+            document.getElementById('progress-container').style.display = 'block';
+        }
+
+        function hideProgress() {
+            document.getElementById('progress-container').style.display = 'none';
+            document.getElementById('progress-bar').style.width = '0%';
+        }
+
+        function updateProgress(percent) {
+            document.getElementById('progress-bar').style.width = percent + '%';
+        }
+
+        // Enhanced applyFilters function
+        function applyFilters() {
+            const searchTerm = document.getElementById('search-filter').value.toLowerCase();
+            const locationFilter = document.getElementById('location-filter').value.toLowerCase();
+            const workTypeFilter = document.getElementById('work-type-filter').value.toLowerCase();
+            const salaryFilter = document.getElementById('salary-filter').value.toLowerCase();
+            const sortFilter = document.getElementById('sort-filter').value;
+
+            filteredJobs = allJobs.filter(job => {
+                const matchesSearch = !searchTerm || 
+                    (job.pozicio || job.Pozíció || job.title || '').toLowerCase().includes(searchTerm) ||
+                    (job.ceg || job.Cég || job.company || '').toLowerCase().includes(searchTerm) ||
+                    (job.leiras || job.Leírás || job.description || '').toLowerCase().includes(searchTerm);
+                
+                const matchesLocation = !locationFilter || 
+                    (job.lokacio || job.Lokáció || job.location || '').toLowerCase().includes(locationFilter);
+                
+                const matchesWorkType = !workTypeFilter || 
+                    (job.munkavégzés_típusa || '').toLowerCase().includes(workTypeFilter);
+                
+                const matchesSalary = !salaryFilter || 
+                    (job.fizetes || '').toLowerCase().includes(salaryFilter);
+
+                return matchesSearch && matchesLocation && matchesWorkType && matchesSalary;
+            });
+
+            // Sorting
+            if (sortFilter === 'company') {
+                filteredJobs.sort((a, b) => (a.ceg || a.Cég || a.company || '').localeCompare(b.ceg || b.Cég || b.company || ''));
+            } else if (sortFilter === 'position') {
+                filteredJobs.sort((a, b) => (a.pozicio || a.Pozíció || a.title || '').localeCompare(b.pozicio || b.Pozíció || b.title || ''));
+            } else if (sortFilter === 'salary') {
+                filteredJobs.sort((a, b) => {
+                    const aSalary = a.fizetes || '';
+                    const bSalary = b.fizetes || '';
+                    if (aSalary.includes('salary publicised') && !bSalary.includes('salary publicised')) return -1;
+                    if (!aSalary.includes('salary publicised') && bSalary.includes('salary publicised')) return 1;
+                    return 0;
+                });
+            } else {
+                // Default: date sorting
+                filteredJobs.sort((a, b) => {
+                    const dateA = new Date(a.publikalva || a.Publikálva || a.published || '');
+                    const dateB = new Date(b.publikalva || b.Publikálva || b.published || '');
+                    return dateB - dateA;
+                });
+            }
+
+            currentPage = 1;
+            renderJobs();
+        }
+
+        // Event listeners
+        document.getElementById('dark-mode-toggle').addEventListener('click', toggleDarkMode);
 
         // Inicializálás
+        loadDarkModePreference();
         loadPortals();
         loadCategories();
         renderSearchHistory(); // Keresési előzmények betöltése
