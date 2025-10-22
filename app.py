@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import requests
 import xml.etree.ElementTree as ET
@@ -11,6 +11,7 @@ from collections import defaultdict
 import threading
 import queue
 import os
+import io
 
 try:
     from bs4 import BeautifulSoup
@@ -255,6 +256,79 @@ def parse_publication_date(date_str: str):
     # Ha nem sikerült feldolgozni, ma dátumot adunk vissza
     return datetime.today().strftime("%Y-%m-%d"), False
 
+def create_excel_export(jobs_data):
+    """Excel fájl létrehozása a munkák adataiból"""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "IT Állások"
+        
+        # Oszlopok definiálása
+        headers = [
+            "ID", "Forrás", "Pozíció", "Cég", "Lokáció", "Fizetés", 
+            "Munkavégzés típusa", "Cég mérete", "Publikálva", 
+            "Lekérés dátuma", "Leírás", "Link"
+        ]
+        
+        # Stílusok definiálása
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Border stílus
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Fejléc sor hozzáadása
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        
+        # Adatok hozzáadása
+        for row_num, job in enumerate(jobs_data, 2):
+            ws.cell(row=row_num, column=1, value=job.get("id", ""))
+            ws.cell(row=row_num, column=2, value=job.get("forras", ""))
+            ws.cell(row=row_num, column=3, value=job.get("pozicio", ""))
+            ws.cell(row=row_num, column=4, value=job.get("ceg", ""))
+            ws.cell(row=row_num, column=5, value=job.get("lokacio", ""))
+            ws.cell(row=row_num, column=6, value=job.get("fizetes", ""))
+            ws.cell(row=row_num, column=7, value=job.get("munkavégzés_típusa", ""))
+            ws.cell(row=row_num, column=8, value=job.get("ceg_merete", ""))
+            ws.cell(row=row_num, column=9, value=job.get("publikalva", ""))
+            ws.cell(row=row_num, column=10, value=job.get("lekeres_datuma", ""))
+            ws.cell(row=row_num, column=11, value=job.get("leiras", ""))
+            ws.cell(row=row_num, column=12, value=job.get("link", ""))
+            
+            # Border hozzáadása minden cellához
+            for col_num in range(1, len(headers) + 1):
+                ws.cell(row=row_num, column=col_num).border = thin_border
+        
+        # Oszlopok szélességének beállítása
+        column_widths = [8, 20, 40, 25, 20, 20, 20, 15, 15, 15, 50, 60]
+        for i, width in enumerate(column_widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = width
+        
+        # Szűrés hozzáadása
+        ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(jobs_data) + 1}"
+        
+        return wb
+        
+    except ImportError:
+        print("openpyxl nincs telepítve, egyszerű Excel export használata")
+        # Fallback: egyszerű CSV formátum
+        return None
+
 def get_total_pages(source_name: str, url: str):
     """Get total number of pages for a search - dinamikus meghatározás"""
     print(f"[DEBUG] get_total_pages hivasa: {source_name} - {url}")
@@ -429,31 +503,47 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                     # Cég neve - profession.hu specifikus szelektorok
                     company_elem = card.select_one(".company-name, .employer-name, .job-company, .company, [data-company], .job-card-company")
                     if not company_elem:
-                        # Fallback: keresés a szövegben - fejlettebb regex
+                        # Fallback: keresés a szövegben - egyszerűsített megközelítés
                         card_text = card.get_text()
                         import re
                         
-                        # 1. Keresés cégnevek után (Kft, Zrt, stb.)
-                        company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][a-zA-ZÁÉÍÓÖŐÚÜŰáéíóöőúüű\s&.,-]+(?:Kft|Zrt|Nyrt|Bt|Kkt|Ltd|Corp|Inc|Hungary|Services|Solutions|Technologies|Systems|Group|Consulting|Software|Digital|IT|Tech))', card_text)
-                        if company_match:
-                            company = company_match.group(1).strip()
-                        else:
-                            # 2. Keresés nagybetűs szavak után (pl. "TATA Consultancy Services Hungary")
-                            company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][A-ZÁÉÍÓÖŐÚÜŰa-záéíóöőúüű\s&.,-]+(?:Hungary|Services|Solutions|Technologies|Systems|Group|Consulting|Software|Digital|IT|Tech|Corp|Inc|Ltd))', card_text)
+                        # Keresés cégnevek után (Kft, Zrt, stb.) - csak a végén lévő cégneveket
+                        # A cég neve általában a job card végén van
+                        lines = card_text.split('\n')
+                        company = ""
+                        
+                        # Végigjárjuk a sorokat hátulról
+                        for line in reversed(lines):
+                            line = line.strip()
+                            if not line:
+                                continue
+                            
+                            # Keresés cégnevek után
+                            company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][a-zA-ZÁÉÍÓÖŐÚÜŰáéíóöőúüű\s&.,-]+(?:Kft|Zrt|Nyrt|Bt|Kkt|Ltd|Corp|Inc|Hungary|Services|Solutions|Technologies|Systems|Group|Consulting|Software|Digital|IT|Tech))\b', line)
                             if company_match:
-                                company = company_match.group(1).strip()
-                            else:
-                                # 3. Keresés tipikus cégnevek után
-                                company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][a-zA-ZÁÉÍÓÖŐÚÜŰáéíóöőúüű\s&.,-]{3,})', card_text)
-                                if company_match:
-                                    potential_company = company_match.group(1).strip()
-                                    # Ellenőrizzük, hogy nem pozíció cím
-                                    if not any(word in potential_company.lower() for word in ['developer', 'engineer', 'manager', 'analyst', 'specialist', 'consultant', 'architect']):
-                                        company = potential_company
-                                    else:
-                                        company = ""
-                                else:
-                                    company = ""
+                                potential_company = company_match.group(1).strip()
+                                # Ellenőrizzük, hogy nem pozíció cím
+                                if not any(word in potential_company.lower() for word in [
+                                    'developer', 'engineer', 'manager', 'analyst', 'specialist', 'consultant', 'architect',
+                                    'programozó', 'fejlesztő', 'menedzser', 'elemző', 'szakember', 'tanácsadó', 'építész',
+                                    'rendszer', 'alkalmazás', 'webes', 'mobil', 'backend', 'frontend', 'full-stack',
+                                    'tervezése', 'fejlesztése', 'optimalizálása', 'integrálva', 'meglévő', 'új', 'munkatárs'
+                                ]):
+                                    company = potential_company
+                                    break
+                        
+                        # Ha nem találtunk cégnevet, próbáljuk meg a teljes szövegből
+                        if not company:
+                            company_match = re.search(r'([A-ZÁÉÍÓÖŐÚÜŰ][a-zA-ZÁÉÍÓÖŐÚÜŰáéíóöőúüű\s&.,-]+(?:Kft|Zrt|Nyrt|Bt|Kkt|Ltd|Corp|Inc|Hungary|Services|Solutions|Technologies|Systems|Group|Consulting|Software|Digital|IT|Tech))\b', card_text)
+                            if company_match:
+                                potential_company = company_match.group(1).strip()
+                                if not any(word in potential_company.lower() for word in [
+                                    'developer', 'engineer', 'manager', 'analyst', 'specialist', 'consultant', 'architect',
+                                    'programozó', 'fejlesztő', 'menedzser', 'elemző', 'szakember', 'tanácsadó', 'építész',
+                                    'rendszer', 'alkalmazás', 'webes', 'mobil', 'backend', 'frontend', 'full-stack',
+                                    'tervezése', 'fejlesztése', 'optimalizálása', 'integrálva', 'meglévő', 'új', 'munkatárs'
+                                ]):
+                                    company = potential_company
                     else:
                         company = clean_text(company_elem.get_text())
                     
@@ -1132,6 +1222,93 @@ scraped_jobs = []
 def get_jobs():
     # Visszaadjuk a scraped állásokat
     return jsonify(scraped_jobs)
+
+@app.route('/api/export/excel')
+def export_excel():
+    """Excel export endpoint"""
+    try:
+        if not scraped_jobs:
+            return jsonify({"error": "Nincsenek adatok az exportáláshoz"}), 400
+        
+        # Excel fájl létrehozása
+        wb = create_excel_export(scraped_jobs)
+        
+        # Excel fájl memóriába írása
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        # Response küldése
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'it_allasok_{datetime.today().strftime("%Y-%m-%d")}.xlsx'
+        )
+        
+    except Exception as e:
+        print(f"Excel export hiba: {e}")
+        return jsonify({"error": f"Excel export hiba: {str(e)}"}), 500
+
+@app.route('/api/export/excel/filtered')
+def export_excel_filtered():
+    """Szűrt Excel export endpoint"""
+    try:
+        if not scraped_jobs:
+            return jsonify({"error": "Nincsenek adatok az exportáláshoz"}), 400
+        
+        # Szűrési paraméterek
+        search = request.args.get('search', '')
+        location = request.args.get('location', '')
+        company = request.args.get('company', '')
+        salary = request.args.get('salary', '')
+        work_type = request.args.get('work_type', '')
+        
+        # Szűrt adatok
+        filtered_jobs = []
+        for job in scraped_jobs:
+            # Szűrési logika
+            matches = True
+            
+            if search:
+                search_lower = search.lower()
+                if not (search_lower in (job.get('pozicio', '') or '').lower() or 
+                       search_lower in (job.get('ceg', '') or '').lower()):
+                    matches = False
+            
+            if location and matches:
+                if location not in (job.get('lokacio', '') or ''):
+                    matches = False
+            
+            if company and matches:
+                if company not in (job.get('ceg', '') or ''):
+                    matches = False
+            
+            if matches:
+                filtered_jobs.append(job)
+        
+        if not filtered_jobs:
+            return jsonify({"error": "Nincsenek szűrt adatok az exportáláshoz"}), 400
+        
+        # Excel fájl létrehozása
+        wb = create_excel_export(filtered_jobs)
+        
+        # Excel fájl memóriába írása
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        # Response küldése
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'it_allasok_szurt_{datetime.today().strftime("%Y-%m-%d")}.xlsx'
+        )
+        
+    except Exception as e:
+        print(f"Szűrt Excel export hiba: {e}")
+        return jsonify({"error": f"Szűrt Excel export hiba: {str(e)}"}), 500
 
 @app.route('/api/status')
 def get_status():
