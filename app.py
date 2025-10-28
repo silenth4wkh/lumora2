@@ -552,11 +552,11 @@ def get_total_pages(source_name: str, url: str):
                             pass
                     
                     # Standard formátum: ?page=N vagy &page=N
-                if 'page=' in last_href:
+                    if 'page=' in last_href:
                         try:
                             page_num = int(last_href.split('page=')[1].split('&')[0].split('#')[0])
                             print(f"[SUCCESS] {source_name} - Dinamikus oldalszám: {page_num} oldal")
-                    return page_num
+                            return page_num
                         except (ValueError, IndexError):
                             pass
                 
@@ -581,7 +581,7 @@ def get_total_pages(source_name: str, url: str):
         total_jobs = 0
         for selector in job_selectors:
             job_cards = soup.select(selector)
-        if job_cards:
+            if job_cards:
                 total_jobs = len(job_cards)
                 break
         
@@ -625,7 +625,7 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
             elif '&page=' in url or '?page=' in url:
                 page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
             else:
-            page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
+                page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
             
             # Debug: URL ellenőrzés
             if page <= 3:  # Csak az első 3 oldalról debug
@@ -687,7 +687,7 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                     else:
                         # Fallback: keresés a szövegben - javított megközelítés
                         card_text = card.get_text()
-                            import re
+                        import re
                         
                         # Keresés cégnevek után (Kft, Zrt, stb.) - csak a végén lévő cégneveket
                         # A cég neve általában a job card végén van
@@ -2924,12 +2924,11 @@ data_validator = DataQualityValidator()
 @app.route('/api/jobs/validate', methods=['POST'])
 def validate_jobs():
     """Állások validálása adatminőség szerint"""
+    global scraped_jobs  # Globális deklaráció a függvény elején
+    
     try:
         if not scraped_jobs:
             return jsonify({"error": "Nincsenek adatok a validáláshoz"}), 400
-        
-        # Globális cache frissítése
-        global scraped_jobs
         
         # Validálás
         validated_jobs = []
