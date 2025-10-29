@@ -1152,7 +1152,15 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                     continue
             
             # Oldalak száma változó már definiálva a loop elején
+            unique_links_in_scraper = set()
+            for job in all_jobs:
+                link = job.get("Link") or job.get("link") or ""
+                if link:
+                    unique_links_in_scraper.add(link.split('?')[0])
+            
             print(f"   [SUCCESS] {source_name} - {len(all_jobs)} állás feldolgozva {pages_processed} oldalról")
+            print(f"   [DEBUG] {source_name} - {len(unique_links_in_scraper)} egyedi link a scraper-ben")
+            print(f"   [DEBUG] {source_name} - Visszaadott állások száma: {len(all_jobs)}")
             return all_jobs
             
         finally:
