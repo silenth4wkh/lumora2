@@ -376,18 +376,28 @@ def _add_data_to_sheet(ws, jobs_data):
         # Row number mint ID
         ws.cell(row=row_num, column=1, value=row_num - 1)
         
-        # DIRECT VALUE ACCESS - nincs fallback
-        ws.cell(row=row_num, column=2, value=job.get("Forrás"))
-        ws.cell(row=row_num, column=3, value=job.get("Pozíció"))
-        ws.cell(row=row_num, column=4, value=job.get("Cég"))
-        ws.cell(row=row_num, column=5, value=job.get("Lokáció"))
-        ws.cell(row=row_num, column=6, value=job.get("Fizetés"))
+        # Adatok hozzáadása - biztos értékekkel
+        forrás = job.get("Forrás", job.get("forrás", ""))
+        pozíció = job.get("Pozíció", job.get("pozíció", ""))
+        cég = job.get("Cég", job.get("cég", ""))
+        lokáció = job.get("Lokáció", job.get("lokáció", ""))
+        link = job.get("Link", job.get("link", ""))
+        
+        ws.cell(row=row_num, column=2, value=forrás)
+        ws.cell(row=row_num, column=3, value=pozíció)
+        ws.cell(row=row_num, column=4, value=cég)
+        ws.cell(row=row_num, column=5, value=lokáció)
+        ws.cell(row=row_num, column=6, value=job.get("Fizetés", ""))
         ws.cell(row=row_num, column=7, value="")  # Munkavégzés_típusa
         ws.cell(row=row_num, column=8, value="")  # Cég_mérete
-        ws.cell(row=row_num, column=9, value=job.get("Publikálva"))
+        ws.cell(row=row_num, column=9, value=job.get("Publikálva", ""))
         ws.cell(row=row_num, column=10, value="")  # Lekérés_dátuma
-        ws.cell(row=row_num, column=11, value=job.get("Leírás"))
-        ws.cell(row=row_num, column=12, value=job.get("Link"))
+        ws.cell(row=row_num, column=11, value=job.get("Leírás", ""))
+        ws.cell(row=row_num, column=12, value=link)
+        
+        # Debug: első sor kiírása
+        if row_num == 2:
+            print(f"[SHEET WRITE DEBUG] Sor {row_num}: Forrás={forrás[:30]}, Pozíció={pozíció[:30]}, Cég={cég[:30]}")
         
         # Border hozzáadása minden cellához
         for col_num in range(1, len(headers) + 1):
