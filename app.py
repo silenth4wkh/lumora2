@@ -900,15 +900,21 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
         chrome_options.add_argument("--disable-images")  # Képek letiltása gyorsabb betöltésért
         
         # WebDriver inicializálása timeout beállításokkal
-        driver = webdriver.Chrome(options=chrome_options)
-        
-        # Timeout beállítások
-        driver.set_page_load_timeout(15)  # 15 másodperc timeout oldal betöltésre
-        driver.implicitly_wait(5)  # 5 másodperc implicit várakozás
+        driver = None
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+            
+            # Timeout beállítások
+            driver.set_page_load_timeout(15)  # 15 másodperc timeout oldal betöltésre
+            driver.implicitly_wait(5)  # 5 másodperc implicit várakozás
+        except Exception as driver_error:
+            print(f"   [ERROR] WebDriver inicializálási hiba: {driver_error}")
+            raise driver_error
         
         try:
             all_jobs = []
             seen_links = set()  # Duplikáció elkerülése
+            pages_processed = 0  # Feldolgozott oldalak száma
             
             # URL parsing
             parsed_url = urlparse(url)
@@ -953,6 +959,7 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
             for page in range(1, max_pages_limited + 1):
                 try:
                     # Progress tracking
+                    pages_processed = page  # Frissítjük a feldolgozott oldalak számát
                     print(f"   [PROGRESS] Oldal {page} - Eddig {len(all_jobs)} egyedi állás")
                     
                     # Page paraméter hozzáadása
@@ -1118,11 +1125,17 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                     # Ne szakítsuk meg az első hibánál, hanem folytassuk
                     continue
             
-            print(f"   [SUCCESS] {source_name} - {len(all_jobs)} állás feldolgozva {page} oldalról")
+            # Oldalak száma változó már definiálva a loop elején
+            print(f"   [SUCCESS] {source_name} - {len(all_jobs)} állás feldolgozva {pages_processed} oldalról")
             return all_jobs
             
         finally:
-            driver.quit()
+            # Csak akkor zárd be a driver-t, ha létezik és inicializálva van
+            try:
+                if driver is not None:
+                    driver.quit()
+            except Exception as e:
+                print(f"   [WARNING] Driver bezárási hiba: {e}")
     
     except ImportError:
         print(f"   [WARNING] Selenium nincs telepítve, fallback scraper használata")
