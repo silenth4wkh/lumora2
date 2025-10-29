@@ -1883,7 +1883,8 @@ def search_jobs():
                 skipped = 0
                 
                 for it in items:
-                    link = it["Link"]
+                    # Biztonságos kulcs elérés - támogatás kis- és nagybetűs mezőnevekhez
+                    link = it.get("Link") or it.get("link") or ""
                     if not link:
                         skipped += 1
                         continue
@@ -1894,30 +1895,30 @@ def search_jobs():
                         skipped += 1
                         continue
 
-                    title = it["Pozíció"]
-                    desc = it["Leírás"]
+                    title = it.get("Pozíció") or it.get("pozicio") or ""
+                    desc = it.get("Leírás") or it.get("leiras") or ""
                     # Ideiglenesen kikapcsoljuk a szűrést, hogy lássuk a teljes számot
                     # if not is_probably_dev(title, desc):
                     #     skipped += 1
                     #     continue
 
                     # HTML scraping-ből már van cég és lokáció
-                    company = it.get("Cég", "") or parse_company_from_summary(desc) or "N/A"
-                    location = it.get("Lokáció", "") or "N/A"
+                    company = it.get("Cég") or it.get("ceg") or parse_company_from_summary(desc) or "N/A"
+                    location = it.get("Lokáció") or it.get("lokacio") or "N/A"
                     
                     # Dátum információk
-                    pub_date_iso = it.get("Publikálva_dátum", "")
-                    is_fresh = it.get("Friss_állás", False)
+                    pub_date_iso = it.get("Publikálva_dátum") or it.get("publikalva_datum") or ""
+                    is_fresh = it.get("Friss_állás") or it.get("friss_allas") or False
 
                     seen_links.add(clean_link)
                     all_rows.append({
                         "id": len(all_rows) + 1,
-                        "forras": it["Forrás"],
+                        "forras": it.get("Forrás") or it.get("forras") or "Ismeretlen",
                         "pozicio": title,
                         "ceg": company or "N/A",
                         "lokacio": location or "N/A",
                         "link": link,  # Eredeti linket tároljuk
-                        "publikalva": it["Publikálva"],
+                        "publikalva": it.get("Publikálva") or it.get("publikalva") or "",
                         "publikalva_datum": pub_date_iso or datetime.today().strftime("%Y-%m-%d"),
                         "friss_allas": is_fresh,
                         "lekeres_datuma": datetime.today().strftime("%Y-%m-%d"),
