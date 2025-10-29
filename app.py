@@ -466,6 +466,10 @@ def create_excel_export(jobs_data):
             cell.border = thin_border
         
         # Adatok hozzáadása - támogatás kis- és nagybetűs mezőneveket is
+        print(f"[EXCEL DEBUG] Adatok hozzáadása: {len(jobs_data)} állás")
+        if jobs_data:
+            print(f"[EXCEL DEBUG] Első job mezői: {list(jobs_data[0].keys())}")
+        
         for row_num, job in enumerate(jobs_data, 2):
             # Kompatibilitás: kis- és nagybetűs mezőnevek támogatása
             ws.cell(row=row_num, column=1, value=job.get("id", job.get("ID", "")))
