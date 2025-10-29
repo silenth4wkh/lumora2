@@ -479,19 +479,25 @@ def create_excel_export(jobs_data):
             print(f"[EXCEL DEBUG] Első job mezői: {list(jobs_data[0].keys())}")
         
         for row_num, job in enumerate(jobs_data, 2):
-            # Kompatibilitás: kis- és nagybetűs mezőnevek támogatása
-            ws.cell(row=row_num, column=1, value=job.get("id", job.get("ID", "")))
-            ws.cell(row=row_num, column=2, value=job.get("Forrás", job.get("forras", job.get("foras", ""))))
-            ws.cell(row=row_num, column=3, value=job.get("Pozíció", job.get("pozicio", job.get("pozicio", ""))))
-            ws.cell(row=row_num, column=4, value=job.get("Cég", job.get("ceg", job.get("ceg", ""))))
-            ws.cell(row=row_num, column=5, value=job.get("Lokáció", job.get("lokacio", job.get("lokacio", ""))))
-            ws.cell(row=row_num, column=6, value=job.get("Fizetés", job.get("fizetes", job.get("fizetes", ""))))
-            ws.cell(row=row_num, column=7, value=job.get("Munkavégzés_típusa", job.get("munkavégzés_típusa", job.get("munkavegzes_tipusa", ""))))
-            ws.cell(row=row_num, column=8, value=job.get("Cég_mérete", job.get("ceg_merete", job.get("ceg_merete", ""))))
-            ws.cell(row=row_num, column=9, value=job.get("Publikálva", job.get("publikalva", job.get("publikalva", ""))))
-            ws.cell(row=row_num, column=10, value=job.get("Lekérés_dátuma", job.get("lekeres_datuma", job.get("lekeres_datuma", ""))))
-            ws.cell(row=row_num, column=11, value=job.get("Leírás", job.get("leiras", job.get("leiras", ""))))
-            ws.cell(row=row_num, column=12, value=job.get("Link", job.get("link", job.get("link", ""))))
+            # Row number mint ID
+            ws.cell(row=row_num, column=1, value=row_num - 1)
+            
+            # Adatok hozzáadása - NO FLUFF JOBS mezőnevek használata
+            # Debug: első sor kiírása
+            if row_num == 2:
+                print(f"[EXCEL FIRST ROW] job keys: {list(job.keys())}")
+            
+            ws.cell(row=row_num, column=2, value=job.get("Forrás", job.get("forrás", job.get("Foras", ""))))
+            ws.cell(row=row_num, column=3, value=job.get("Pozíció", job.get("pozíció", job.get("Pozicio", ""))))
+            ws.cell(row=row_num, column=4, value=job.get("Cég", job.get("cég", job.get("Ceg", ""))))
+            ws.cell(row=row_num, column=5, value=job.get("Lokáció", job.get("lokáció", job.get("Lokacio", ""))))
+            ws.cell(row=row_num, column=6, value=job.get("Fizetés", job.get("fizetés", job.get("Fizetes", ""))))
+            ws.cell(row=row_num, column=7, value="")  # Munkavégzés_típusa
+            ws.cell(row=row_num, column=8, value="")  # Cég_mérete
+            ws.cell(row=row_num, column=9, value=job.get("Publikálva", job.get("Publikalva", "")))
+            ws.cell(row=row_num, column=10, value="")  # Lekérés_dátuma
+            ws.cell(row=row_num, column=11, value=job.get("Leírás", job.get("Leiras", "")))
+            ws.cell(row=row_num, column=12, value=job.get("Link", job.get("link", "")))
             
             # Border hozzáadása minden cellához
             for col_num in range(1, len(headers) + 1):
@@ -2161,10 +2167,8 @@ def export_excel():
         
         # Debug: első job mezőinek ellenőrzése
         if scraped_jobs:
-            print(f"[EXCEL DEBUG] Első job mezői: {list(scraped_jobs[0].keys())}")
-            print(f"[EXCEL DEBUG] Első job Forrás: {scraped_jobs[0].get('Forrás', 'N/A')}")
-            print(f"[EXCEL DEBUG] Első job Pozíció: {scraped_jobs[0].get('Pozíció', 'N/A')}")
-            print(f"[EXCEL DEBUG] Első job Cég: {scraped_jobs[0].get('Cég', 'N/A')}")
+            print(f"[EXCEL DEBUG] scraped_jobs első job mezői: {list(scraped_jobs[0].keys())}")
+            print(f"[EXCEL DEBUG] Első job teljes objektum: {scraped_jobs[0]}")
         
         # Excel fájl létrehozása - multi-portal vagy single-portal
         if len(portals) > 1:
