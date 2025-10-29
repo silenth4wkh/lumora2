@@ -363,6 +363,14 @@ def _add_data_to_sheet(ws, jobs_data):
         cell.alignment = header_alignment
         cell.border = thin_border
     
+    # Debug logging
+    print(f"[SHEET DEBUG] Adatok hozzáadása: {len(jobs_data)} állás")
+    if jobs_data:
+        print(f"[SHEET DEBUG] Első job mezői: {list(jobs_data[0].keys())}")
+        print(f"[SHEET DEBUG] Első job Forrás: {jobs_data[0].get('Forrás', 'N/A')}")
+        print(f"[SHEET DEBUG] Első job Pozíció: {jobs_data[0].get('Pozíció', 'N/A')}")
+        print(f"[SHEET DEBUG] Első job Cég: {jobs_data[0].get('Cég', 'N/A')}")
+    
     # Adatok hozzáadása
     for row_num, job in enumerate(jobs_data, 2):
         ws.cell(row=row_num, column=1, value=job.get("id", ""))
