@@ -916,9 +916,41 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
             parsed_url = urlparse(url)
             query_params = parse_qs(parsed_url.query)
             
-            # Timeout limit - maximum 20 oldal, hogy ne ragadjon le
-            max_pages_limited = min(max_pages, 20)
-            print(f"   [INFO] Maximum {max_pages_limited} oldal feldolgozása timeout elkerülésére")
+            # Elméleti maximum oldal - csak loop elkerülésére, nem korlátozza a valódi oldalszámot
+            max_pages_limited = min(max_pages, 100)  # 100 oldal elméleti maximum
+            print(f"   [INFO] Elméleti maximum {max_pages_limited} oldal (loop elkerülésére)")
+            
+            # Dinamikus oldalszám detektálás - első oldal betöltése
+            try:
+                first_page_url = urlunparse((parsed_url.scheme, parsed_url.netloc, parsed_url.path, parsed_url.params, urlencode({**query_params, 'page': ['1']}, doseq=True), parsed_url.fragment))
+                print(f"   [DEBUG] Első oldal betöltése dinamikus oldalszám detektáláshoz: {first_page_url}")
+                driver.get(first_page_url)
+                
+                # Pagination elemek keresése
+                pagination_elements = driver.find_elements(By.CSS_SELECTOR, ".pagination a, .pager a, [class*='page'] a")
+                if pagination_elements:
+                    max_page_found = 0
+                    for elem in pagination_elements:
+                        try:
+                            page_text = elem.text.strip()
+                            if page_text.isdigit():
+                                max_page_found = max(max_page_found, int(page_text))
+                        except:
+                            continue
+                    
+                    if max_page_found > 0:
+                        print(f"   [SUCCESS] Dinamikus oldalszám detektálva: {max_page_found} oldal")
+                        max_pages_limited = min(max_page_found, 100)  # Valódi oldalszám, de max 100
+                    else:
+                        print(f"   [INFO] Dinamikus oldalszám nem detektálható, elméleti maximum használata")
+                else:
+                    print(f"   [INFO] Pagination elemek nem találhatók, elméleti maximum használata")
+                    
+            except Exception as e:
+                print(f"   [WARNING] Dinamikus oldalszám detektálás hiba: {e}")
+                print(f"   [INFO] Elméleti maximum használata")
+            
+            print(f"   [INFO] Feldolgozandó oldalszám: {max_pages_limited}")
             
             for page in range(1, max_pages_limited + 1):
                 try:
@@ -930,8 +962,12 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                     new_query = urlencode(query_params, doseq=True)
                     page_url = urlunparse((parsed_url.scheme, parsed_url.netloc, parsed_url.path, parsed_url.params, new_query, parsed_url.fragment))
                     
-                    print(f"   [DEBUG] Oldal {page} betöltése: {page_url}")
-                    driver.get(page_url)
+                    # Csak akkor töltse be az oldalt, ha nem az első oldal (már betöltötte)
+                    if page > 1:
+                        print(f"   [DEBUG] Oldal {page} betöltése: {page_url}")
+                        driver.get(page_url)
+                    else:
+                        print(f"   [DEBUG] Oldal {page} már betöltve (dinamikus detektálás során)")
                     
                     # Oldal betöltésének várása - rövidebb timeout
                     try:
