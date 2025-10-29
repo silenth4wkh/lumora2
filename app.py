@@ -2151,11 +2151,20 @@ def export_excel():
         
         print(f"[EXCEL] {len(portals)} portál: {list(portals)}")
         
+        # Debug: első job mezőinek ellenőrzése
+        if scraped_jobs:
+            print(f"[EXCEL DEBUG] Első job mezői: {list(scraped_jobs[0].keys())}")
+            print(f"[EXCEL DEBUG] Első job Forrás: {scraped_jobs[0].get('Forrás', 'N/A')}")
+            print(f"[EXCEL DEBUG] Első job Pozíció: {scraped_jobs[0].get('Pozíció', 'N/A')}")
+            print(f"[EXCEL DEBUG] Első job Cég: {scraped_jobs[0].get('Cég', 'N/A')}")
+        
         # Excel fájl létrehozása - multi-portal vagy single-portal
         if len(portals) > 1:
+            print(f"[EXCEL] Multi-portal export használata")
             wb = create_excel_export_multi_portal(scraped_jobs)
             filename = f'it_allasok_tobb_portal_{datetime.today().strftime("%Y-%m-%d")}.xlsx'
         else:
+            print(f"[EXCEL] Single-portal export használata")
             wb = create_excel_export(scraped_jobs)
             filename = f'it_allasok_{datetime.today().strftime("%Y-%m-%d")}.xlsx'
         
