@@ -884,17 +884,29 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
         import time
         from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
         
-        # Chrome opciók beállítása
+        # Chrome opciók beállítása - timeout optimalizálás
         chrome_options = Options()
         chrome_options.add_argument("--headless")  # Háttérben futás
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--disable-features=VizDisplayCompositor")
         chrome_options.add_argument("--window-size=1920,1080")
         chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
         
-        # WebDriver inicializálása
+        # Timeout beállítások
+        chrome_options.add_argument("--page-load-strategy=eager")  # Gyorsabb betöltés
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-plugins")
+        chrome_options.add_argument("--disable-images")  # Képek letiltása gyorsabb betöltésért
+        
+        # WebDriver inicializálása timeout beállításokkal
         driver = webdriver.Chrome(options=chrome_options)
+        
+        # Timeout beállítások
+        driver.set_page_load_timeout(15)  # 15 másodperc timeout oldal betöltésre
+        driver.implicitly_wait(5)  # 5 másodperc implicit várakozás
         
         try:
             all_jobs = []
@@ -904,7 +916,11 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
             parsed_url = urlparse(url)
             query_params = parse_qs(parsed_url.query)
             
-            for page in range(1, max_pages + 1):
+            # Timeout limit - maximum 20 oldal, hogy ne ragadjon le
+            max_pages_limited = min(max_pages, 20)
+            print(f"   [INFO] Maximum {max_pages_limited} oldal feldolgozása timeout elkerülésére")
+            
+            for page in range(1, max_pages_limited + 1):
                 try:
                     # Progress tracking
                     print(f"   [PROGRESS] Oldal {page} - Eddig {len(all_jobs)} egyedi állás")
@@ -917,13 +933,31 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                     print(f"   [DEBUG] Oldal {page} betöltése: {page_url}")
                     driver.get(page_url)
                     
-                    # Oldal betöltésének várása
-                    WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "a[class*='posting-list-item']"))
-                    )
+                    # Oldal betöltésének várása - rövidebb timeout
+                    try:
+                        WebDriverWait(driver, 5).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "a[class*='posting-list-item']"))
+                        )
+                    except TimeoutException:
+                        print(f"   [WARNING] Oldal {page} timeout - próbáljuk meg alternatív selectorral")
+                        # Alternatív selector próbálkozás
+                        try:
+                            WebDriverWait(driver, 3).until(
+                                EC.presence_of_element_located((By.CSS_SELECTOR, ".posting-list-item"))
+                            )
+                        except TimeoutException:
+                            print(f"   [WARNING] Oldal {page} teljes timeout - folytatás")
+                            # Folytatjuk timeout ellenére
                     
-                    # Job cards kinyerése - MINDEN alkalommal friss lekérés (stale element elkerülése)
+                    # Job cards kinyerése - alternatív selectorokkal
                     job_cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='posting-list-item']")
+                    if not job_cards:
+                        print(f"   [DEBUG] Elsődleges selector sikertelen, alternatív próbálkozás")
+                        job_cards = driver.find_elements(By.CSS_SELECTOR, ".posting-list-item")
+                    if not job_cards:
+                        print(f"   [DEBUG] Másodlagos selector sikertelen, harmadik próbálkozás")
+                        job_cards = driver.find_elements(By.CSS_SELECTOR, "a[href*='/hu/job/']")
+                    
                     print(f"   [DEBUG] Oldal {page}: {len(job_cards)} job card találva")
                     
                     # Ha nincs job card, kilépünk
@@ -1042,11 +1076,13 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                     time.sleep(2)
                     
                 except TimeoutException:
-                    print(f"   [DEBUG] Oldal {page} timeout, kilépés")
-                    break
+                    print(f"   [WARNING] Oldal {page} timeout - folytatás következő oldallal")
+                    # Ne szakítsuk meg, hanem folytassuk
+                    continue
                 except Exception as e:
                     print(f"   [ERROR] Oldal {page} hiba: {e}")
-                    break
+                    # Ne szakítsuk meg az első hibánál, hanem folytassuk
+                    continue
             
             print(f"   [SUCCESS] {source_name} - {len(all_jobs)} állás feldolgozva {page} oldalról")
             return all_jobs
