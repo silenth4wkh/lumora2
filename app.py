@@ -614,6 +614,11 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
     print(f"[INFO] {source_name} - {max_pages} oldal feldolgozása")
     
     all_items = []
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    
+    # Detail oldalak betöltése optimalizált módon (batch vagy csak hiányzó adatok esetén)
+    jobs_needing_details = []  # Linkek, amelyekhez detail adatok kellenek
     
     for page in range(1, max_pages + 1):
         try:
@@ -766,9 +771,17 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                     else:
                         location = clean_text(location_elem.get_text())
                     
+                    # Ha nincs lokáció vagy kevés az info, hozzáadjuk a detail oldal betöltéshez
+                    if link and (not location or len(location) < 3):
+                        jobs_needing_details.append((link, "location"))
+                    
                     # Leírás
                     desc_elem = card.select_one(".description, .job-description, .summary, .excerpt")
                     desc = clean_text(desc_elem.get_text()) if desc_elem else ""
+                    
+                    # Ha nincs leírás, hozzáadjuk a detail oldal betöltéshez
+                    if link and not desc:
+                        jobs_needing_details.append((link, "description"))
                     
                     # Dátum
                     date_elem = card.select_one(".date, .published, .job-date, .time")
@@ -801,7 +814,43 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
             print(f"ERROR fetching page {page}: {e}")
             break
     
-    print(f"DEBUG: {source_name} - Összesen {len(all_items)} állás {page-1} oldalról (max {max_pages})")
+    # Detail oldalak feldolgozása (csak ha szükséges)
+    if jobs_needing_details and len(jobs_needing_details) > 0:
+        print(f"   [INFO] {len(jobs_needing_details)} állás detail oldal betöltése...")
+        # Maximum 50 detail oldal (nem túl lassú legyen)
+        max_details = min(50, len(jobs_needing_details))
+        unique_detail_links = list(set([link for link, _ in jobs_needing_details[:max_details]]))
+        
+        for i, detail_link in enumerate(unique_detail_links):
+            try:
+                work_location, job_description = fetch_profession_job_details(detail_link, session)
+                
+                # Megkeressük a megfelelő állást az all_items-ben és frissítjük
+                for item in all_items:
+                    item_link = item.get("Link", "")
+                    clean_item_link = item_link.split('?')[0] if '?' in item_link else item_link
+                    clean_detail_link = detail_link.split('?')[0] if '?' in detail_link else detail_link
+                    
+                    if clean_item_link == clean_detail_link or detail_link in item_link:
+                        if work_location:
+                            # Munkavégzés helyszín kiegészítése
+                            if item.get("Lokáció"):
+                                if work_location not in item["Lokáció"]:
+                                    item["Lokáció"] = f"{item['Lokáció']} ({work_location})"
+                            else:
+                                item["Lokáció"] = work_location
+                        if job_description:
+                            item["Leírás"] = job_description
+                        break
+                
+                # Rate limiting
+                if (i + 1) % 10 == 0:
+                    time.sleep(0.5)
+            except Exception as e:
+                print(f"   [DEBUG] Detail oldal feldolgozás hiba ({detail_link[:60]}): {e}")
+                continue
+    
+    print(f"{source_name} - Összesen {len(all_items)} állás {page-1} oldalról (max {max_pages})")
     return all_items
 
 
@@ -1098,17 +1147,135 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                                             else:
                                                 location = last_part.title()
                             
-                            # Dátum - jelenlegi dátum
-                            pub_date = datetime.now().strftime("%Y.%m.%d")
-                            pub_date_iso = datetime.now()
-                            is_fresh = True
+                            # Dátum kinyerése - próbáljuk meg a job card szövegéből vagy attribútumaiból
+                            pub_date = ""
+                            pub_date_iso = None
+                            is_fresh = False
+                            
+                            try:
+                                # Dátum keresése a job card szövegében
+                                card_text = card.text if hasattr(card, 'text') else card.get_attribute('textContent') if hasattr(card, 'get_attribute') else ""
+                                date_patterns = [
+                                    r'\d+\s+napja',
+                                    r'\d+\s+hete',
+                                    r'\d+\s+hónapja',
+                                    r'\d{4}\.\d{2}\.\d{2}',
+                                    r'\d{4}-\d{2}-\d{2}',
+                                    r'\d{1,2}\.\d{1,2}\.\d{4}',
+                                    r'\bma\b',
+                                    r'\btegnap\b'
+                                ]
+                                
+                                date_text = ""
+                                for pattern in date_patterns:
+                                    matches = re.findall(pattern, card_text, re.IGNORECASE)
+                                    if matches:
+                                        date_text = matches[0]
+                                        break
+                                
+                                if date_text:
+                                    # Dátum parsing
+                                    date_text_lower = date_text.lower()
+                                    if "napja" in date_text_lower:
+                                        days_ago = int(date_text.split()[0])
+                                        pub_date_iso = datetime.now() - timedelta(days=days_ago)
+                                        pub_date = pub_date_iso.strftime("%Y.%m.%d")
+                                    elif "hete" in date_text_lower:
+                                        weeks_ago = int(date_text.split()[0])
+                                        pub_date_iso = datetime.now() - timedelta(weeks=weeks_ago)
+                                        pub_date = pub_date_iso.strftime("%Y.%m.%d")
+                                    elif "hónapja" in date_text_lower:
+                                        months_ago = int(date_text.split()[0])
+                                        pub_date_iso = datetime.now() - timedelta(days=months_ago * 30)
+                                        pub_date = pub_date_iso.strftime("%Y.%m.%d")
+                                    elif date_text_lower == "ma":
+                                        pub_date_iso = datetime.now()
+                                        pub_date = pub_date_iso.strftime("%Y.%m.%d")
+                                        is_fresh = True
+                                    elif date_text_lower == "tegnap":
+                                        pub_date_iso = datetime.now() - timedelta(days=1)
+                                        pub_date = pub_date_iso.strftime("%Y.%m.%d")
+                                    elif "." in date_text and len(date_text) >= 8:
+                                        pub_date = date_text
+                                        try:
+                                            pub_date_iso = datetime.strptime(date_text, "%Y.%m.%d")
+                                        except:
+                                            try:
+                                                pub_date_iso = datetime.strptime(date_text, "%Y-%m-%d")
+                                            except:
+                                                pub_date_iso = None
+                                
+                                # Ha nincs dátum a job card-ban, próbáljuk meg dátum elem keresését
+                                if not pub_date_iso:
+                                    try:
+                                        # Dátum elem keresése Selenium-nel
+                                        date_elements = card.find_elements(By.CSS_SELECTOR, '[class*="date"], [class*="time"], [class*="published"], time, .date-posted')
+                                        for date_elem in date_elements:
+                                            date_text = date_elem.text.strip()
+                                            if date_text:
+                                                for pattern in date_patterns:
+                                                    matches = re.findall(pattern, date_text, re.IGNORECASE)
+                                                    if matches:
+                                                        date_text = matches[0]
+                                                        date_text_lower = date_text.lower()
+                                                        if "napja" in date_text_lower:
+                                                            days_ago = int(date_text.split()[0])
+                                                            pub_date_iso = datetime.now() - timedelta(days=days_ago)
+                                                            pub_date = pub_date_iso.strftime("%Y.%m.%d")
+                                                            break
+                                                        elif "." in date_text and len(date_text) >= 8:
+                                                            pub_date = date_text
+                                                            try:
+                                                                pub_date_iso = datetime.strptime(date_text, "%Y.%m.%d")
+                                                                break
+                                                            except:
+                                                                pass
+                                                if pub_date_iso:
+                                                    break
+                                    except Exception as e:
+                                        print(f"   [DEBUG] Dátum elem keresés hiba: {e}")
+                                
+                                # MEGJEGYZÉS: Detail oldal betöltése túl lassú lenne minden job card-hoz
+                                # Jobb megoldás: batch processing vagy csak a job card-ból kinyert dátum használata
+                                
+                                # Ha még mindig nincs dátum, használjuk a jelenlegi dátumot (fallback)
+                                if not pub_date_iso:
+                                    pub_date_iso = datetime.now()
+                                    pub_date = pub_date_iso.strftime("%Y.%m.%d")
+                                    is_fresh = True
+                                
+                                # Friss állás meghatározása (7 napon belül)
+                                if pub_date_iso:
+                                    days_ago = (datetime.now() - pub_date_iso).days if isinstance(pub_date_iso, datetime) else 0
+                                    is_fresh = days_ago <= 7
+                                    
+                            except Exception as e:
+                                print(f"   [DEBUG] Dátum kinyerés hiba: {e}")
+                                # Fallback
+                                pub_date_iso = datetime.now()
+                                pub_date = pub_date_iso.strftime("%Y.%m.%d")
+                                is_fresh = True
+                            
+                            # Job description - próbáljuk meg a job card szövegéből
+                            job_description = ""
+                            try:
+                                # Job card teljes szöveg
+                                card_full_text = card.text if hasattr(card, 'text') else ""
+                                # Rövid leírás kinyerése (ha van)
+                                if "..." in card_full_text or len(card_full_text) > 100:
+                                    # Próbáljuk meg egy rövid summary-t kinyerni
+                                    sentences = card_full_text.split('.')
+                                    if len(sentences) > 1:
+                                        job_description = '. '.join(sentences[:2]).strip()[:300]
+                            except:
+                                pass
                             
                             if link:
                                 all_jobs.append({
                                     "Forrás": source_name,
                                     "Pozíció": title,
                                     "Link": link,
-                                    "Leírás": "",
+                                    "Leírás": job_description,
                                     "Publikálva": pub_date,
                                     "Publikálva_dátum": pub_date_iso,
                                     "Friss_állás": is_fresh,
@@ -1737,6 +1904,103 @@ def fetch_job_meta(url: str, session: requests.Session = None, retries: int = 2,
             time.sleep(pause)
     # ha nem sikerült, térjünk vissza None-okkal
     return (None, None)
+
+def fetch_profession_job_details(url: str, session: requests.Session = None):
+    """Profession.hu detail oldal kinyerése - job description és munkavégzés helyszín"""
+    sess = session or requests.Session()
+    work_location = ""
+    job_description = ""
+    
+    try:
+        # Session paraméterek eltávolítása az URL-ből
+        clean_url = url.split('?')[0] if '?' in url else url
+        
+        r = sess.get(clean_url, headers=HEADERS, timeout=15)
+        r.raise_for_status()
+        r.encoding = "utf-8"
+        
+        soup = BeautifulSoup(r.text, "html.parser")
+        
+        # Munkavégzés helyszín - "Távmunka / Remote", "Hybrid", "Opcionális iroda"
+        # HTML alapján: <div class="my-auto font-size-16 address-data"> Távmunka / Remote• Opcionális iroda
+        work_location_elems = soup.select('.address-data, [class*="address-data"], .my-auto[class*="address"]')
+        if not work_location_elems:
+            # Fallback: tartalmazza az "address" szöveget
+            work_location_elems = soup.find_all(string=re.compile(r'Távmunka|Remote|Hybrid|Opcionális', re.I))
+        
+        work_text = ""
+        if work_location_elems:
+            if isinstance(work_location_elems[0], str):
+                work_text = work_location_elems[0].strip()
+            else:
+                work_text = work_location_elems[0].get_text(strip=True) if hasattr(work_location_elems[0], 'get_text') else str(work_location_elems[0])
+        
+        # Regex keresés a HTML szövegében
+        if not work_text:
+            work_match = re.search(r'(Távmunka\s*/?\s*Remote|Hybrid|Opcionális\s*iroda)', r.text, re.IGNORECASE)
+            if work_match:
+                work_text = work_match.group(1)
+        
+        # Távmunka/Remote/Hybrid keresés
+        if work_text:
+            work_text_lower = work_text.lower()
+            if "távmunka" in work_text_lower or "remote" in work_text_lower:
+                work_location += "Távmunka/Remote"
+            if "hybrid" in work_text_lower:
+                if work_location:
+                    work_location += ", "
+                work_location += "Hybrid"
+            if "opcionális iroda" in work_text_lower or "optional" in work_text_lower:
+                if work_location:
+                    work_location += ", "
+                work_location += "Opcionális iroda"
+            # Ha nincs specifikus info, a teljes szöveg (előbb clean)
+            if not work_location and work_text:
+                work_location = re.sub(r'[•·]', ', ', work_text).strip()[:100]
+        
+        # Job description - "Állás leírása" rész
+        # HTML alapján: <h2>Állás leírása</h2> és alatta <h3>Feladatok</h3>, <h3>Elvárások</h3>, stb.
+        desc_section = soup.find('h2', string=re.compile('Állás leírása', re.I))
+        if desc_section:
+            # A h2 után következő tartalom (feladatok, elvárások, stb.)
+            desc_parts = []
+            current = desc_section.find_next_sibling()
+            while current:
+                if current.name in ['h3', 'h4', 'strong']:
+                    heading_text = current.get_text(strip=True)
+                    # Következő p vagy ul/li elemek
+                    next_content = current.find_next(['p', 'ul', 'li'])
+                    if next_content:
+                        content_text = next_content.get_text(separator=' ', strip=True)
+                        if content_text and len(content_text) > 10:
+                            desc_parts.append(f"{heading_text}: {content_text[:200]}")
+                elif current.name == 'div' and 'job-details-list' in str(current.get('class', [])):
+                    # Lista formátum
+                    items = current.find_all('li')
+                    for item in items[:3]:
+                        item_text = item.get_text(strip=True)
+                        if item_text:
+                            desc_parts.append(item_text[:200])
+                current = current.find_next_sibling()
+                if len(desc_parts) >= 5:
+                    break
+            
+            if desc_parts:
+                job_description = " | ".join(desc_parts)
+        
+        # Fallback: struktúra nélküli keresés
+        if not job_description:
+            # Keresés "Feladatok", "Elvárások" kulcsszavak körül
+            desc_pattern = re.search(r'(Feladatok|Elvárások|Előnyt jelent).*?(?=<\/section>|<\/div>|$)', r.text, re.DOTALL | re.IGNORECASE)
+            if desc_pattern:
+                desc_html = desc_pattern.group(0)
+                desc_soup = BeautifulSoup(desc_html, "html.parser")
+                job_description = desc_soup.get_text(separator=' ', strip=True)[:1000]
+        
+    except Exception as e:
+        print(f"   [DEBUG] Profession.hu detail oldal kinyerés hiba ({url[:80]}): {e}")
+    
+    return work_location, job_description
 
 def parse_company_from_summary(summary: str):
     if not isinstance(summary, str):
