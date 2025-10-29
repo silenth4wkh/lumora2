@@ -2115,11 +2115,23 @@ def get_jobs():
 @app.route('/api/export/excel')
 def export_excel():
     """Excel export endpoint - több portál külön sheet-ekkel"""
+    import logging
+    from datetime import datetime
+    
+    # Logging fájlba is
+    log_file = open('excel_export_debug.log', 'a', encoding='utf-8')
+    
+    def log_both(msg):
+        print(msg)
+        log_file.write(f"[{datetime.now()}] {msg}\n")
+        log_file.flush()
+    
     try:
-        print(f"[EXCEL DEBUG START] scraped_jobs count: {len(scraped_jobs) if scraped_jobs else 0}")
+        log_both(f"[EXCEL DEBUG START] scraped_jobs count: {len(scraped_jobs) if scraped_jobs else 0}")
         
         if not scraped_jobs:
-            print("[EXCEL ERROR] scraped_jobs üres!")
+            log_both("[EXCEL ERROR] scraped_jobs üres!")
+            log_file.close()
             return jsonify({"error": "Nincsenek adatok az exportáláshoz"}), 400
         
         # Portálok számának ellenőrzése
@@ -2129,29 +2141,34 @@ def export_excel():
             portal_name = source.split(" – ")[0] if " – " in source else source.split(" - ")[0] if " - " in source else source
             portals.add(portal_name)
         
-        print(f"[EXCEL] {len(portals)} portál: {list(portals)}")
+        log_both(f"[EXCEL] {len(portals)} portál: {list(portals)}")
         
         # Debug: első job mezőinek ellenőrzése
         if scraped_jobs:
-            print(f"[EXCEL DEBUG] scraped_jobs első job mezői: {list(scraped_jobs[0].keys())}")
-            print(f"[EXCEL DEBUG] Első 3 job részletes:")
+            log_both(f"[EXCEL DEBUG] scraped_jobs első job mezői: {list(scraped_jobs[0].keys())}")
+            log_both(f"[EXCEL DEBUG] Első 3 job részletes:")
             for i, job in enumerate(scraped_jobs[:3]):
-                print(f"[EXCEL DEBUG] Job {i+1}: {job}")
+                log_both(f"[EXCEL DEBUG] Job {i+1}: {job}")
         
         # Excel fájl létrehozása - multi-portal vagy single-portal
         if len(portals) > 1:
-            print(f"[EXCEL] Multi-portal export használata")
+            log_both(f"[EXCEL] Multi-portal export használata")
             wb = create_excel_export_multi_portal(scraped_jobs)
             filename = f'it_allasok_tobb_portal_{datetime.today().strftime("%Y-%m-%d")}.xlsx'
         else:
-            print(f"[EXCEL] Single-portal export használata")
+            log_both(f"[EXCEL] Single-portal export használata")
             wb = create_excel_export(scraped_jobs)
             filename = f'it_allasok_{datetime.today().strftime("%Y-%m-%d")}.xlsx'
+        
+        log_both(f"[EXCEL] Workbook létrehozva: {wb is not None}")
         
         # Excel fájl memóriába írása
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
+        log_both(f"[EXCEL] Workbook mentve, méret: {len(output.getvalue())} bytes")
+        
+        log_file.close()
         
         # Response küldése
         return send_file(
@@ -2162,7 +2179,10 @@ def export_excel():
         )
         
     except Exception as e:
-        print(f"Excel export hiba: {e}")
+        log_both(f"Excel export hiba: {e}")
+        import traceback
+        log_both(f"Traceback: {traceback.format_exc()}")
+        log_file.close()
         return jsonify({"error": f"Excel export hiba: {str(e)}"}), 500
 
 @app.route('/api/export/excel/filtered')
