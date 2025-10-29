@@ -465,20 +465,21 @@ def create_excel_export(jobs_data):
             cell.alignment = header_alignment
             cell.border = thin_border
         
-        # Adatok hozzáadása
+        # Adatok hozzáadása - támogatás kis- és nagybetűs mezőneveket is
         for row_num, job in enumerate(jobs_data, 2):
-            ws.cell(row=row_num, column=1, value=job.get("id", ""))
-            ws.cell(row=row_num, column=2, value=job.get("forras", ""))
-            ws.cell(row=row_num, column=3, value=job.get("pozicio", ""))
-            ws.cell(row=row_num, column=4, value=job.get("ceg", ""))
-            ws.cell(row=row_num, column=5, value=job.get("lokacio", ""))
-            ws.cell(row=row_num, column=6, value=job.get("fizetes", ""))
-            ws.cell(row=row_num, column=7, value=job.get("munkavégzés_típusa", ""))
-            ws.cell(row=row_num, column=8, value=job.get("ceg_merete", ""))
-            ws.cell(row=row_num, column=9, value=job.get("publikalva", ""))
-            ws.cell(row=row_num, column=10, value=job.get("lekeres_datuma", ""))
-            ws.cell(row=row_num, column=11, value=job.get("leiras", ""))
-            ws.cell(row=row_num, column=12, value=job.get("link", ""))
+            # Kompatibilitás: kis- és nagybetűs mezőnevek támogatása
+            ws.cell(row=row_num, column=1, value=job.get("id", job.get("ID", "")))
+            ws.cell(row=row_num, column=2, value=job.get("Forrás", job.get("forras", job.get("foras", ""))))
+            ws.cell(row=row_num, column=3, value=job.get("Pozíció", job.get("pozicio", job.get("pozicio", ""))))
+            ws.cell(row=row_num, column=4, value=job.get("Cég", job.get("ceg", job.get("ceg", ""))))
+            ws.cell(row=row_num, column=5, value=job.get("Lokáció", job.get("lokacio", job.get("lokacio", ""))))
+            ws.cell(row=row_num, column=6, value=job.get("Fizetés", job.get("fizetes", job.get("fizetes", ""))))
+            ws.cell(row=row_num, column=7, value=job.get("Munkavégzés_típusa", job.get("munkavégzés_típusa", job.get("munkavegzes_tipusa", ""))))
+            ws.cell(row=row_num, column=8, value=job.get("Cég_mérete", job.get("ceg_merete", job.get("ceg_merete", ""))))
+            ws.cell(row=row_num, column=9, value=job.get("Publikálva", job.get("publikalva", job.get("publikalva", ""))))
+            ws.cell(row=row_num, column=10, value=job.get("Lekérés_dátuma", job.get("lekeres_datuma", job.get("lekeres_datuma", ""))))
+            ws.cell(row=row_num, column=11, value=job.get("Leírás", job.get("leiras", job.get("leiras", ""))))
+            ws.cell(row=row_num, column=12, value=job.get("Link", job.get("link", job.get("link", ""))))
             
             # Border hozzáadása minden cellához
             for col_num in range(1, len(headers) + 1):
