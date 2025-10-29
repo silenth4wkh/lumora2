@@ -1911,7 +1911,15 @@ def search_jobs():
                     # Biztosítjuk, hogy lista legyen
                     if items is None:
                         items = []
-                print(f"[SEARCH] {name} - {len(items)} állás")
+                print(f"[SEARCH] {name} - {len(items)} állás (scraper visszatérés)")
+                if "nofluffjobs.com" in name.lower():
+                    # Debug: No Fluff Jobs linkek számolása
+                    unique_links_in_items = set()
+                    for item in items:
+                        link = item.get("Link") or item.get("link") or ""
+                        if link:
+                            unique_links_in_items.add(link.split('?')[0])
+                    print(f"   [DEBUG] No Fluff Jobs - {len(unique_links_in_items)} egyedi link a scraper visszatérésben")
                 
                 # Debug: első néhány link ellenőrzése
                 if items:
