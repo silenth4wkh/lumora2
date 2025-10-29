@@ -373,18 +373,21 @@ def _add_data_to_sheet(ws, jobs_data):
     
     # Adatok hozzáadása
     for row_num, job in enumerate(jobs_data, 2):
-        ws.cell(row=row_num, column=1, value=job.get("id", ""))
-        ws.cell(row=row_num, column=2, value=job.get("Forrás", ""))
-        ws.cell(row=row_num, column=3, value=job.get("Pozíció", ""))
-        ws.cell(row=row_num, column=4, value=job.get("Cég", ""))
-        ws.cell(row=row_num, column=5, value=job.get("Lokáció", ""))
-        ws.cell(row=row_num, column=6, value=job.get("Fizetés", ""))
-        ws.cell(row=row_num, column=7, value=job.get("Munkavégzés_típusa", ""))
-        ws.cell(row=row_num, column=8, value=job.get("Cég_mérete", ""))
-        ws.cell(row=row_num, column=9, value=job.get("Publikálva", ""))
-        ws.cell(row=row_num, column=10, value=job.get("Lekérés_dátuma", ""))
-        ws.cell(row=row_num, column=11, value=job.get("Leírás", ""))
-        ws.cell(row=row_num, column=12, value=job.get("Link", ""))
+        # Row number mint ID
+        ws.cell(row=row_num, column=1, value=row_num - 1)
+        
+        # DIRECT VALUE ACCESS - nincs fallback
+        ws.cell(row=row_num, column=2, value=job.get("Forrás"))
+        ws.cell(row=row_num, column=3, value=job.get("Pozíció"))
+        ws.cell(row=row_num, column=4, value=job.get("Cég"))
+        ws.cell(row=row_num, column=5, value=job.get("Lokáció"))
+        ws.cell(row=row_num, column=6, value=job.get("Fizetés"))
+        ws.cell(row=row_num, column=7, value="")  # Munkavégzés_típusa
+        ws.cell(row=row_num, column=8, value="")  # Cég_mérete
+        ws.cell(row=row_num, column=9, value=job.get("Publikálva"))
+        ws.cell(row=row_num, column=10, value="")  # Lekérés_dátuma
+        ws.cell(row=row_num, column=11, value=job.get("Leírás"))
+        ws.cell(row=row_num, column=12, value=job.get("Link"))
         
         # Border hozzáadása minden cellához
         for col_num in range(1, len(headers) + 1):
@@ -487,17 +490,18 @@ def create_excel_export(jobs_data):
             if row_num == 2:
                 print(f"[EXCEL FIRST ROW] job keys: {list(job.keys())}")
             
-            ws.cell(row=row_num, column=2, value=job.get("Forrás", job.get("forrás", job.get("Foras", ""))))
-            ws.cell(row=row_num, column=3, value=job.get("Pozíció", job.get("pozíció", job.get("Pozicio", ""))))
-            ws.cell(row=row_num, column=4, value=job.get("Cég", job.get("cég", job.get("Ceg", ""))))
-            ws.cell(row=row_num, column=5, value=job.get("Lokáció", job.get("lokáció", job.get("Lokacio", ""))))
-            ws.cell(row=row_num, column=6, value=job.get("Fizetés", job.get("fizetés", job.get("Fizetes", ""))))
+            # DIRECT VALUE ACCESS - nincs job.get(), hanem direkt kulcsokkal
+            ws.cell(row=row_num, column=2, value=job.get("Forrás"))
+            ws.cell(row=row_num, column=3, value=job.get("Pozíció"))
+            ws.cell(row=row_num, column=4, value=job.get("Cég"))
+            ws.cell(row=row_num, column=5, value=job.get("Lokáció"))
+            ws.cell(row=row_num, column=6, value=job.get("Fizetés"))
             ws.cell(row=row_num, column=7, value="")  # Munkavégzés_típusa
             ws.cell(row=row_num, column=8, value="")  # Cég_mérete
-            ws.cell(row=row_num, column=9, value=job.get("Publikálva", job.get("Publikalva", "")))
+            ws.cell(row=row_num, column=9, value=job.get("Publikálva"))
             ws.cell(row=row_num, column=10, value="")  # Lekérés_dátuma
-            ws.cell(row=row_num, column=11, value=job.get("Leírás", job.get("Leiras", "")))
-            ws.cell(row=row_num, column=12, value=job.get("Link", job.get("link", "")))
+            ws.cell(row=row_num, column=11, value=job.get("Leírás"))
+            ws.cell(row=row_num, column=12, value=job.get("Link"))
             
             # Border hozzáadása minden cellához
             for col_num in range(1, len(headers) + 1):
@@ -2153,7 +2157,10 @@ def get_jobs():
 def export_excel():
     """Excel export endpoint - több portál külön sheet-ekkel"""
     try:
+        print(f"[EXCEL DEBUG START] scraped_jobs count: {len(scraped_jobs) if scraped_jobs else 0}")
+        
         if not scraped_jobs:
+            print("[EXCEL ERROR] scraped_jobs üres!")
             return jsonify({"error": "Nincsenek adatok az exportáláshoz"}), 400
         
         # Portálok számának ellenőrzése
@@ -2168,7 +2175,9 @@ def export_excel():
         # Debug: első job mezőinek ellenőrzése
         if scraped_jobs:
             print(f"[EXCEL DEBUG] scraped_jobs első job mezői: {list(scraped_jobs[0].keys())}")
-            print(f"[EXCEL DEBUG] Első job teljes objektum: {scraped_jobs[0]}")
+            print(f"[EXCEL DEBUG] Első 3 job részletes:")
+            for i, job in enumerate(scraped_jobs[:3]):
+                print(f"[EXCEL DEBUG] Job {i+1}: {job}")
         
         # Excel fájl létrehozása - multi-portal vagy single-portal
         if len(portals) > 1:
