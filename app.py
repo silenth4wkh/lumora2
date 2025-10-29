@@ -1851,25 +1851,37 @@ def search_jobs():
                         # IT főfeed - RSS
                         url = keyword_or_url
                         items = fetch_rss_items(name, url)
+                        # Biztosítjuk, hogy lista legyen
+                        if items is None:
+                            items = []
                     elif "nofluffjobs.com" in keyword_or_url:
                         # No Fluff Jobs - pagination scraper
                         url = keyword_or_url
                         items = fetch_nofluffjobs_jobs_pagination(name, url, max_pages=1000)
+                        # Biztosítjuk, hogy lista legyen
+                        if items is None:
+                            items = []
                     else:
                         # HTML scraping - speciális logika IT főoldalhoz
                         url = keyword_or_url
                         # Dinamikus oldalszám - automatikusan meghatározza a teljes oldalszámot
                         items = fetch_html_jobs(name, url)
+                        # Biztosítjuk, hogy lista legyen
+                        if items is None:
+                            items = []
                 else:
                     # Kulcsszavas keresés - HTML scraping (dinamikus oldalszám)
                     url = f"https://www.profession.hu/allasok/1,0,0,{quote(keyword_or_url, safe='')}"
                     # Dinamikus oldalszám - automatikusan meghatározza a teljes oldalszámot
                     items = fetch_html_jobs(name, url)
+                    # Biztosítjuk, hogy lista legyen
+                    if items is None:
+                        items = []
                 print(f"[SEARCH] {name} - {len(items)} állás")
                 
                 # Debug: első néhány link ellenőrzése
                 if items:
-                    sample_links = [item["Link"] for item in items[:3]]
+                    sample_links = [item.get("Link") or item.get("link") or "" for item in items[:3]]
                     print(f"   Sample links: {sample_links}")
                     print(f"   [STATS] Eredeti állások száma: {len(items)}")
                     if "it-programozas-fejlesztes" in url:
