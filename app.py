@@ -376,28 +376,37 @@ def _add_data_to_sheet(ws, jobs_data):
         # Row number mint ID
         ws.cell(row=row_num, column=1, value=row_num - 1)
         
-        # Adatok hozzáadása - biztos értékekkel
-        forrás = job.get("Forrás", job.get("forrás", ""))
-        pozíció = job.get("Pozíció", job.get("pozíció", ""))
-        cég = job.get("Cég", job.get("cég", ""))
-        lokáció = job.get("Lokáció", job.get("lokáció", ""))
-        link = job.get("Link", job.get("link", ""))
-        
-        ws.cell(row=row_num, column=2, value=forrás)
-        ws.cell(row=row_num, column=3, value=pozíció)
-        ws.cell(row=row_num, column=4, value=cég)
-        ws.cell(row=row_num, column=5, value=lokáció)
-        ws.cell(row=row_num, column=6, value=job.get("Fizetés", ""))
-        ws.cell(row=row_num, column=7, value="")  # Munkavégzés_típusa
-        ws.cell(row=row_num, column=8, value="")  # Cég_mérete
-        ws.cell(row=row_num, column=9, value=job.get("Publikálva", ""))
-        ws.cell(row=row_num, column=10, value="")  # Lekérés_dátuma
-        ws.cell(row=row_num, column=11, value=job.get("Leírás", ""))
-        ws.cell(row=row_num, column=12, value=link)
-        
-        # Debug: első sor kiírása
-        if row_num == 2:
-            print(f"[SHEET WRITE DEBUG] Sor {row_num}: Forrás={forrás[:30]}, Pozíció={pozíció[:30]}, Cég={cég[:30]}")
+        # TESZT: Közvetlen értékek job objektumból - nincs .get()
+        try:
+            # Próbáljuk meg közvetlenül a kulcsokat
+            forrás = job["Forrás"] if "Forrás" in job else ""
+            pozíció = job["Pozíció"] if "Pozíció" in job else ""
+            cég = job["Cég"] if "Cég" in job else ""
+            lokáció = job["Lokáció"] if "Lokáció" in job else ""
+            link = job["Link"] if "Link" in job else ""
+            publikálva = job["Publikálva"] if "Publikálva" in job else ""
+            leírás = job["Leírás"] if "Leírás" in job else ""
+            
+            # CELLÁK ÍRÁSA
+            ws.cell(row=row_num, column=2, value=str(forrás))
+            ws.cell(row=row_num, column=3, value=str(pozíció))
+            ws.cell(row=row_num, column=4, value=str(cég))
+            ws.cell(row=row_num, column=5, value=str(lokáció))
+            ws.cell(row=row_num, column=6, value=job.get("Fizetés", ""))
+            ws.cell(row=row_num, column=7, value="")  # Munkavégzés_típusa
+            ws.cell(row=row_num, column=8, value="")  # Cég_mérete
+            ws.cell(row=row_num, column=9, value=str(publikálva))
+            ws.cell(row=row_num, column=10, value="")  # Lekérés_dátuma
+            ws.cell(row=row_num, column=11, value=str(leírás))
+            ws.cell(row=row_num, column=12, value=str(link))
+            
+            # Debug: első sor
+            if row_num == 2:
+                print(f"[SHEET WRITE] Sor {row_num}: Forrás='{forrás}', Pozíció='{pozíció}', Cég='{cég}'")
+        except KeyError as e:
+            print(f"[SHEET WRITE ERROR] KeyError sor {row_num}: {e}, job keys: {list(job.keys())}")
+        except Exception as e:
+            print(f"[SHEET WRITE ERROR] Exception sor {row_num}: {e}")
         
         # Border hozzáadása minden cellához
         for col_num in range(1, len(headers) + 1):
@@ -448,88 +457,28 @@ def _add_summary_to_sheet(ws, portal_data):
     ws.column_dimensions['C'].width = 15
 
 def create_excel_export(jobs_data):
-    """Excel fájl létrehozása a munkák adataiból (régi módszer - kompatibilitás)"""
+    """Excel fájl létrehozása a munkák adataiból - MOST AZ _add_data_to_sheet-ET HASZNÁLJA"""
     try:
         from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from openpyxl.utils import get_column_letter
         
         wb = Workbook()
         ws = wb.active
         ws.title = "IT Állások"
         
-        # Oszlopok definiálása
-        headers = [
-            "ID", "Forrás", "Pozíció", "Cég", "Lokáció", "Fizetés", 
-            "Munkavégzés típusa", "Cég mérete", "Publikálva", 
-            "Lekérés dátuma", "Leírás", "Link"
-        ]
+        print(f"[CREATE_EXCEL_EXPORT] jobs_data count: {len(jobs_data)}")
         
-        # Stílusok definiálása
-        header_font = Font(bold=True, color="FFFFFF")
-        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-        header_alignment = Alignment(horizontal="center", vertical="center")
-        
-        # Border stílus
-        thin_border = Border(
-            left=Side(style='thin'),
-            right=Side(style='thin'),
-            top=Side(style='thin'),
-            bottom=Side(style='thin')
-        )
-        
-        # Fejléc sor hozzáadása
-        for col_num, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col_num, value=header)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = header_alignment
-            cell.border = thin_border
-        
-        # Adatok hozzáadása - támogatás kis- és nagybetűs mezőneveket is
-        print(f"[EXCEL DEBUG] Adatok hozzáadása: {len(jobs_data)} állás")
-        if jobs_data:
-            print(f"[EXCEL DEBUG] Első job mezői: {list(jobs_data[0].keys())}")
-        
-        for row_num, job in enumerate(jobs_data, 2):
-            # Row number mint ID
-            ws.cell(row=row_num, column=1, value=row_num - 1)
-            
-            # Adatok hozzáadása - NO FLUFF JOBS mezőnevek használata
-            # Debug: első sor kiírása
-            if row_num == 2:
-                print(f"[EXCEL FIRST ROW] job keys: {list(job.keys())}")
-            
-            # DIRECT VALUE ACCESS - nincs job.get(), hanem direkt kulcsokkal
-            ws.cell(row=row_num, column=2, value=job.get("Forrás"))
-            ws.cell(row=row_num, column=3, value=job.get("Pozíció"))
-            ws.cell(row=row_num, column=4, value=job.get("Cég"))
-            ws.cell(row=row_num, column=5, value=job.get("Lokáció"))
-            ws.cell(row=row_num, column=6, value=job.get("Fizetés"))
-            ws.cell(row=row_num, column=7, value="")  # Munkavégzés_típusa
-            ws.cell(row=row_num, column=8, value="")  # Cég_mérete
-            ws.cell(row=row_num, column=9, value=job.get("Publikálva"))
-            ws.cell(row=row_num, column=10, value="")  # Lekérés_dátuma
-            ws.cell(row=row_num, column=11, value=job.get("Leírás"))
-            ws.cell(row=row_num, column=12, value=job.get("Link"))
-            
-            # Border hozzáadása minden cellához
-            for col_num in range(1, len(headers) + 1):
-                ws.cell(row=row_num, column=col_num).border = thin_border
-        
-        # Oszlopok szélességének beállítása
-        column_widths = [8, 20, 40, 25, 20, 20, 20, 15, 15, 15, 50, 60]
-        for i, width in enumerate(column_widths, 1):
-            ws.column_dimensions[get_column_letter(i)].width = width
-        
-        # Szűrés hozzáadása
-        ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{len(jobs_data) + 1}"
+        # HASZNÁLJUK AZ _add_data_to_sheet FÜGGVÉNYT - ami biztosan működik!
+        _add_data_to_sheet(ws, jobs_data)
         
         return wb
         
     except ImportError:
         print("openpyxl nincs telepítve, egyszerű Excel export használata")
-        # Fallback: egyszerű CSV formátum
+        return None
+    except Exception as e:
+        print(f"[CREATE_EXCEL_EXPORT] HIBÁ: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def get_total_pages(source_name: str, url: str):
@@ -585,11 +534,11 @@ def get_total_pages(source_name: str, url: str):
                             pass
                     
                     # Standard formátum: ?page=N vagy &page=N
-                    if 'page=' in last_href:
+                if 'page=' in last_href:
                         try:
                             page_num = int(last_href.split('page=')[1].split('&')[0].split('#')[0])
                             print(f"[SUCCESS] {source_name} - Dinamikus oldalszám: {page_num} oldal")
-                            return page_num
+                    return page_num
                         except (ValueError, IndexError):
                             pass
                 
@@ -614,7 +563,7 @@ def get_total_pages(source_name: str, url: str):
         total_jobs = 0
         for selector in job_selectors:
             job_cards = soup.select(selector)
-            if job_cards:
+        if job_cards:
                 total_jobs = len(job_cards)
                 break
         
@@ -658,7 +607,7 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
             elif '&page=' in url or '?page=' in url:
                 page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
             else:
-                page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
+            page_url = f"{url}&page={page}" if "?" in url else f"{url}?page={page}"
             
             # Debug: URL ellenőrzés
             if page <= 3:  # Csak az első 3 oldalról debug
@@ -720,7 +669,7 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                     else:
                         # Fallback: keresés a szövegben - javított megközelítés
                         card_text = card.get_text()
-                        import re
+                            import re
                         
                         # Keresés cégnevek után (Kft, Zrt, stb.) - csak a végén lévő cégneveket
                         # A cég neve általában a job card végén van
