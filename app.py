@@ -1920,17 +1920,33 @@ def search_jobs():
                 kept = 0
                 skipped = 0
                 
+                # No Fluff Jobs esetén portál-specifikus duplikáció tracking
+                source_seen_links = set()
+                
                 for it in items:
                     # Biztonságos kulcs elérés - támogatás kis- és nagybetűs mezőnevekhez
                     link = it.get("Link") or it.get("link") or ""
                     if not link:
                         skipped += 1
+                        print(f"   [DEBUG] Skipped: nincs link")
                         continue
 
                     # Duplikáció ellenőrzés - clean link alapján (session paramétereket eltávolítjuk)
                     clean_link = link.split('?')[0]  # Eltávolítjuk a query paramétereket
+                    
+                    # Portál-specifikus duplikáció ellenőrzés (No Fluff Jobs esetén)
+                    if "nofluffjobs.com" in name.lower():
+                        if clean_link in source_seen_links:
+                            skipped += 1
+                            continue
+                        source_seen_links.add(clean_link)
+                    
+                    # Globális duplikáció ellenőrzés (portálok között)
                     if clean_link in seen_links:
                         skipped += 1
+                        # Debug: miért esett ki
+                        if "nofluffjobs.com" in name.lower():
+                            print(f"   [DEBUG] No Fluff Jobs link kihagyva (globális duplikáció): {clean_link[:80]}")
                         continue
 
                     title = it.get("Pozíció") or it.get("pozicio") or ""
@@ -1975,11 +1991,18 @@ def search_jobs():
                 # Debug: részletes szűrési statisztikák
                 if items:
                     print(f"   [STATS] Feldolgozott: {len(items)} állás")
-                    print(f"   [LINKS] Egyedi linkek: {len(seen_links)}")
+                    print(f"   [LINKS] Egyedi linkek (globális): {len(seen_links)}")
+                    if "nofluffjobs.com" in name.lower() and 'source_seen_links' in locals():
+                        print(f"   [LINKS] No Fluff Jobs belső duplikáció: {len(source_seen_links)} egyedi link")
                     print(f"   [SUCCESS] Megtartva: {kept}")
                     print(f"   [ERROR] Kihagyva: {skipped}")
                     if skipped > 0:
-                        print(f"   [INFO] Kihagyás okai: duplikáció vagy nem fejlesztői")
+                        print(f"   [INFO] Kihagyás okai: duplikáció vagy hiányzó adatok")
+                        # Részletesebb debug No Fluff Jobs esetén
+                        if "nofluffjobs.com" in name.lower():
+                            print(f"   [DEBUG] No Fluff Jobs - Scraper találat: {len(items)}, Megtartva: {kept}, Kihagyva: {skipped}")
+                            if len(items) - kept - skipped > 0:
+                                print(f"   [WARNING] Adatveszteség: {len(items) - kept - skipped} állás nem lett feldolgozva!")
                 elif skipped > kept:
                     print(f"   [WARNING] Sok duplikáció - valószínűleg ugyanazok az állások különböző kulcsszavakkal")
                 
