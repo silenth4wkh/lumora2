@@ -771,17 +771,19 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                     else:
                         location = clean_text(location_elem.get_text())
                     
-                    # Ha nincs lokáció vagy kevés az info, hozzáadjuk a detail oldal betöltéshez
-                    if link and (not location or len(location) < 3):
-                        jobs_needing_details.append((link, "location"))
-                    
                     # Leírás
                     desc_elem = card.select_one(".description, .job-description, .summary, .excerpt")
                     desc = clean_text(desc_elem.get_text()) if desc_elem else ""
                     
-                    # Ha nincs leírás, hozzáadjuk a detail oldal betöltéshez
-                    if link and not desc:
-                        jobs_needing_details.append((link, "description"))
+                    # Ha nincs lokáció vagy kevés az info, VAGY nincs leírás, hozzáadjuk a detail oldal betöltéshez
+                    if link:
+                        needs_detail = False
+                        if not location or len(location) < 3:
+                            jobs_needing_details.append((link, "location"))
+                            needs_detail = True
+                        if not desc or len(desc) < 20:
+                            jobs_needing_details.append((link, "description"))
+                            needs_detail = True
                     
                     # Dátum
                     date_elem = card.select_one(".date, .published, .job-date, .time")
@@ -789,6 +791,9 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                     
                     # Dátum feldolgozás - ISO formátumra konvertálás
                     pub_date_iso, is_fresh = parse_publication_date(pub_date)
+                    # Biztosítjuk, hogy string formátumban legyen
+                    if isinstance(pub_date_iso, datetime):
+                        pub_date_iso = pub_date_iso.strftime("%Y-%m-%d")
                     
                     if title and link:
                         all_items.append({
@@ -797,7 +802,7 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
                             "Link": link, 
                             "Leírás": desc,
                             "Publikálva": pub_date,
-                            "Publikálva_dátum": pub_date_iso,
+                            "Publikálva_dátum": pub_date_iso,  # ISO string formátum: YYYY-MM-DD
                             "Friss_állás": is_fresh,
                             "Cég": company,
                             "Lokáció": location
@@ -1270,6 +1275,14 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                             except:
                                 pass
                             
+                            # Dátum string formátumba konvertálása
+                            if isinstance(pub_date_iso, datetime):
+                                pub_date_iso_str = pub_date_iso.strftime("%Y-%m-%d")
+                            elif pub_date_iso:
+                                pub_date_iso_str = str(pub_date_iso) if isinstance(pub_date_iso, str) else ""
+                            else:
+                                pub_date_iso_str = ""
+                            
                             if link:
                                 all_jobs.append({
                                     "Forrás": source_name,
@@ -1277,7 +1290,7 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                                     "Link": link,
                                     "Leírás": job_description,
                                     "Publikálva": pub_date,
-                                    "Publikálva_dátum": pub_date_iso,
+                                    "Publikálva_dátum": pub_date_iso_str,  # ISO string formátum: YYYY-MM-DD
                                     "Friss_állás": is_fresh,
                                     "Cég": company,
                                     "Lokáció": location,
@@ -1494,8 +1507,21 @@ def fetch_nofluffjobs_jobs(source_name: str, url: str, max_pages: int = None):
                 # Fizetés - No Fluff Jobs-ban általában nincs a listában
                 salary = ""
                 
-                # Leírás - nincs a listában
+                # Leírás - próbáljuk meg a job card-ból
                 desc = ""
+                try:
+                    # Job card teljes szöveg
+                    card_text = card.get_text(strip=True) if hasattr(card, 'get_text') else str(card)
+                    # Rövid leírás kinyerése (ha van hosszú szöveg)
+                    if len(card_text) > 100:
+                        # Először próbáljuk meg egy summary-t
+                        sentences = card_text.split('.')
+                        if len(sentences) > 1:
+                            desc = '. '.join(sentences[:2]).strip()[:300]
+                        else:
+                            desc = card_text[:300]
+                except:
+                    pass
                 
                 # Dátum kinyerése - No Fluff Jobs-ban általában a job card-ban van
                 pub_date = ""
@@ -1573,10 +1599,25 @@ def fetch_nofluffjobs_jobs(source_name: str, url: str, max_pages: int = None):
                 
                 # Friss állás meghatározása (7 napon belül)
                 if pub_date_iso:
-                    days_ago = (datetime.now() - pub_date_iso).days
+                    if isinstance(pub_date_iso, datetime):
+                        days_ago = (datetime.now() - pub_date_iso).days
+                    else:
+                        try:
+                            pub_date_obj = datetime.strptime(str(pub_date_iso), "%Y-%m-%d")
+                            days_ago = (datetime.now() - pub_date_obj).days
+                        except:
+                            days_ago = 0
                     is_fresh = days_ago <= 7
                 
-                print(f"[DEBUG] Date: {pub_date}, Fresh: {is_fresh}")
+                # Dátum string formátumba konvertálása
+                if isinstance(pub_date_iso, datetime):
+                    pub_date_iso_str = pub_date_iso.strftime("%Y-%m-%d")
+                elif pub_date_iso:
+                    pub_date_iso_str = str(pub_date_iso) if isinstance(pub_date_iso, str) else ""
+                else:
+                    pub_date_iso_str = ""
+                
+                print(f"[DEBUG] Date: {pub_date}, Date ISO: {pub_date_iso_str}, Fresh: {is_fresh}")
                 
                 print(f"[DEBUG] Before append - Title: '{title}', Company: '{company}', Location: '{location}'")
                 
@@ -1587,7 +1628,7 @@ def fetch_nofluffjobs_jobs(source_name: str, url: str, max_pages: int = None):
                         "Link": link, 
                         "Leírás": desc,
                         "Publikálva": pub_date,
-                        "Publikálva_dátum": pub_date_iso,
+                        "Publikálva_dátum": pub_date_iso_str,  # ISO string formátum: YYYY-MM-DD
                         "Friss_állás": is_fresh,
                         "Cég": company,
                         "Lokáció": location,
@@ -2243,6 +2284,33 @@ def search_jobs():
                     # Dátum információk
                     pub_date_iso = it.get("Publikálva_dátum") or it.get("publikalva_datum") or ""
                     is_fresh = it.get("Friss_állás") or it.get("friss_allas") or False
+                    
+                    # Dátum konvertálása string formátumba (ha datetime objektum)
+                    if isinstance(pub_date_iso, datetime):
+                        pub_date_iso = pub_date_iso.strftime("%Y-%m-%d")
+                    elif pub_date_iso and isinstance(pub_date_iso, str):
+                        # Ha már string, de nem ISO formátumban, próbáljuk meg parse-olni
+                        try:
+                            # Ha RFC2822 formátum (pl. "Wed, 29 Oct 2025 14:49:04 GMT")
+                            from email.utils import parsedate_to_datetime
+                            dt = parsedate_to_datetime(pub_date_iso)
+                            pub_date_iso = dt.strftime("%Y-%m-%d")
+                        except:
+                            # Ha már ISO formátum vagy más formátum, megtartjuk
+                            pass
+                    
+                    # Ha még mindig nincs dátum, használjuk a mai dátumot
+                    if not pub_date_iso:
+                        pub_date_iso = datetime.today().strftime("%Y-%m-%d")
+                    
+                    # Leírás ellenőrzése (eredeti scraper-ből vagy detail oldalról)
+                    desc_final = it.get("Leírás") or it.get("leiras") or desc or ""
+                    # Ha a desc változó van, de üres, próbáljuk meg az it-ből
+                    if not desc_final and desc:
+                        desc_final = desc
+                    
+                    # Lokáció ellenőrzése (eredeti scraper-ből vagy detail oldalról)
+                    location_final = location or it.get("Lokáció") or it.get("lokacio") or "N/A"
 
                     seen_links.add(clean_link)
                     all_rows.append({
@@ -2250,13 +2318,13 @@ def search_jobs():
                         "forras": it.get("Forrás") or it.get("forras") or "Ismeretlen",
                         "pozicio": title,
                         "ceg": company or "N/A",
-                        "lokacio": location or "N/A",
+                        "lokacio": location_final,
                         "link": link,  # Eredeti linket tároljuk
                         "publikalva": it.get("Publikálva") or it.get("publikalva") or "",
-                        "publikalva_datum": pub_date_iso or datetime.today().strftime("%Y-%m-%d"),
+                        "publikalva_datum": pub_date_iso,
                         "friss_allas": is_fresh,
                         "lekeres_datuma": datetime.today().strftime("%Y-%m-%d"),
-                        "leiras": (desc[:200] if isinstance(desc, str) else "")
+                        "leiras": (desc_final[:500] if isinstance(desc_final, str) else "")  # Növeltük 500 karakterre
                     })
                     kept += 1
 
