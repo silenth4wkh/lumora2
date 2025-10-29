@@ -904,9 +904,9 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
         try:
             driver = webdriver.Chrome(options=chrome_options)
             
-            # Timeout beállítások
-            driver.set_page_load_timeout(15)  # 15 másodperc timeout oldal betöltésre
-            driver.implicitly_wait(5)  # 5 másodperc implicit várakozás
+            # Timeout beállítások - növelve a megbízhatóságért
+            driver.set_page_load_timeout(30)  # 30 másodperc timeout oldal betöltésre (webes környezetben lassabb lehet)
+            driver.implicitly_wait(10)  # 10 másodperc implicit várakozás
         except Exception as driver_error:
             print(f"   [ERROR] WebDriver inicializálási hiba: {driver_error}")
             raise driver_error
@@ -956,6 +956,10 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
             
             print(f"   [INFO] Feldolgozandó oldalszám: {max_pages_limited}")
             
+            # Konvergencia/üres oldal követés
+            consecutive_empty_pages = 0
+            max_consecutive_empty = 3  # Maximum 3 egymás után üres oldal
+            
             for page in range(1, max_pages_limited + 1):
                 try:
                     # Progress tracking
@@ -974,21 +978,25 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                     else:
                         print(f"   [DEBUG] Oldal {page} már betöltve (dinamikus detektálás során)")
                     
-                    # Oldal betöltésének várása - rövidebb timeout
+                    # Oldal betöltésének várása - növelt timeout
+                    page_loaded = False
                     try:
-                        WebDriverWait(driver, 5).until(
+                        WebDriverWait(driver, 15).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, "a[class*='posting-list-item']"))
                         )
+                        page_loaded = True
                     except TimeoutException:
                         print(f"   [WARNING] Oldal {page} timeout - próbáljuk meg alternatív selectorral")
                         # Alternatív selector próbálkozás
                         try:
-                            WebDriverWait(driver, 3).until(
+                            WebDriverWait(driver, 10).until(
                                 EC.presence_of_element_located((By.CSS_SELECTOR, ".posting-list-item"))
                             )
+                            page_loaded = True
                         except TimeoutException:
                             print(f"   [WARNING] Oldal {page} teljes timeout - folytatás")
-                            # Folytatjuk timeout ellenére
+                            # Folytatjuk timeout ellenére, de jelezzük hogy az oldal nem töltődött be
+                            page_loaded = False
                     
                     # Job cards kinyerése - alternatív selectorokkal
                     job_cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='posting-list-item']")
@@ -999,12 +1007,20 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                         print(f"   [DEBUG] Másodlagos selector sikertelen, harmadik próbálkozás")
                         job_cards = driver.find_elements(By.CSS_SELECTOR, "a[href*='/hu/job/']")
                     
-                    print(f"   [DEBUG] Oldal {page}: {len(job_cards)} job card találva")
+                    print(f"   [DEBUG] Oldal {page}: {len(job_cards)} job card találva (oldal betöltve: {page_loaded})")
                     
-                    # Ha nincs job card, kilépünk
+                    # Ha nincs job card, növeljük a consecutive_empty számlálót
                     if len(job_cards) == 0:
-                        print(f"   [DEBUG] Oldal {page} üres, kilépés")
-                        break
+                        consecutive_empty_pages += 1
+                        print(f"   [WARNING] Oldal {page} üres ({consecutive_empty_pages}/{max_consecutive_empty} egymás után üres)")
+                        
+                        # Ha túl sok egymás után üres oldal, kilépünk
+                        if consecutive_empty_pages >= max_consecutive_empty:
+                            print(f"   [STOP] {max_consecutive_empty} egymás után üres oldal - kilépés")
+                            break
+                    else:
+                        # Ha van tartalom, nullázzuk a számlálót
+                        consecutive_empty_pages = 0
                     
                     # EGYEDI LINKKEK ELLENŐRZÉSE - elkerüljük a duplikációt
                     new_links_on_page = 0
@@ -1116,13 +1132,23 @@ def fetch_nofluffjobs_jobs_pagination(source_name: str, url: str, max_pages: int
                     # Várás a következő oldal között
                     time.sleep(2)
                     
-                except TimeoutException:
-                    print(f"   [WARNING] Oldal {page} timeout - folytatás következő oldallal")
-                    # Ne szakítsuk meg, hanem folytassuk
+                except TimeoutException as te:
+                    consecutive_empty_pages += 1
+                    print(f"   [WARNING] Oldal {page} timeout - folytatás következő oldallal ({consecutive_empty_pages}/{max_consecutive_empty})")
+                    print(f"   [ERROR] Timeout részletek: {str(te)[:200]}")
+                    # Ha túl sok timeout egymás után, kilépünk
+                    if consecutive_empty_pages >= max_consecutive_empty:
+                        print(f"   [STOP] {max_consecutive_empty} egymás után timeout - kilépés")
+                        break
                     continue
                 except Exception as e:
+                    consecutive_empty_pages += 1
                     print(f"   [ERROR] Oldal {page} hiba: {e}")
-                    # Ne szakítsuk meg az első hibánál, hanem folytassuk
+                    print(f"   [ERROR] Hiba típus: {type(e).__name__}")
+                    # Ha túl sok hiba egymás után, kilépünk
+                    if consecutive_empty_pages >= max_consecutive_empty:
+                        print(f"   [STOP] {max_consecutive_empty} egymás után hiba - kilépés")
+                        break
                     continue
             
             # Oldalak száma változó már definiálva a loop elején
