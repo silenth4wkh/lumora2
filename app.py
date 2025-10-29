@@ -367,46 +367,62 @@ def _add_data_to_sheet(ws, jobs_data):
     print(f"[SHEET DEBUG] Adatok hozzáadása: {len(jobs_data)} állás")
     if jobs_data:
         print(f"[SHEET DEBUG] Első job mezői: {list(jobs_data[0].keys())}")
-        print(f"[SHEET DEBUG] Első job Forrás: {jobs_data[0].get('Forrás', 'N/A')}")
-        print(f"[SHEET DEBUG] Első job Pozíció: {jobs_data[0].get('Pozíció', 'N/A')}")
-        print(f"[SHEET DEBUG] Első job Cég: {jobs_data[0].get('Cég', 'N/A')}")
+        # Profession.hu formátum ellenőrzése (kisbetűs)
+        print(f"[SHEET DEBUG] Profession.hu formátum - forras: {jobs_data[0].get('forras', 'N/A')}")
+        print(f"[SHEET DEBUG] Profession.hu formátum - pozicio: {jobs_data[0].get('pozicio', 'N/A')}")
+        print(f"[SHEET DEBUG] Profession.hu formátum - ceg: {jobs_data[0].get('ceg', 'N/A')}")
+        # No Fluff Jobs formátum ellenőrzése (nagybetűs)
+        print(f"[SHEET DEBUG] No Fluff Jobs formátum - Forrás: {jobs_data[0].get('Forrás', 'N/A')}")
+        print(f"[SHEET DEBUG] No Fluff Jobs formátum - Pozíció: {jobs_data[0].get('Pozíció', 'N/A')}")
+        print(f"[SHEET DEBUG] No Fluff Jobs formátum - Cég: {jobs_data[0].get('Cég', 'N/A')}")
     
-    # Adatok hozzáadása
+    # Adatok hozzáadása - TÁMOGATÁS: Profession.hu (kisbetűs) ÉS No Fluff Jobs (nagybetűs)
     for row_num, job in enumerate(jobs_data, 2):
         # Row number mint ID
         ws.cell(row=row_num, column=1, value=row_num - 1)
         
-        # TESZT: Közvetlen értékek job objektumból - nincs .get()
-        try:
-            # Próbáljuk meg közvetlenül a kulcsokat
-            forrás = job["Forrás"] if "Forrás" in job else ""
-            pozíció = job["Pozíció"] if "Pozíció" in job else ""
-            cég = job["Cég"] if "Cég" in job else ""
-            lokáció = job["Lokáció"] if "Lokáció" in job else ""
-            link = job["Link"] if "Link" in job else ""
-            publikálva = job["Publikálva"] if "Publikálva" in job else ""
-            leírás = job["Leírás"] if "Leírás" in job else ""
-            
-            # CELLÁK ÍRÁSA
-            ws.cell(row=row_num, column=2, value=str(forrás))
-            ws.cell(row=row_num, column=3, value=str(pozíció))
-            ws.cell(row=row_num, column=4, value=str(cég))
-            ws.cell(row=row_num, column=5, value=str(lokáció))
-            ws.cell(row=row_num, column=6, value=job.get("Fizetés", ""))
-            ws.cell(row=row_num, column=7, value="")  # Munkavégzés_típusa
-            ws.cell(row=row_num, column=8, value="")  # Cég_mérete
-            ws.cell(row=row_num, column=9, value=str(publikálva))
-            ws.cell(row=row_num, column=10, value="")  # Lekérés_dátuma
-            ws.cell(row=row_num, column=11, value=str(leírás))
-            ws.cell(row=row_num, column=12, value=str(link))
-            
-            # Debug: első sor
-            if row_num == 2:
-                print(f"[SHEET WRITE] Sor {row_num}: Forrás='{forrás}', Pozíció='{pozíció}', Cég='{cég}'")
-        except KeyError as e:
-            print(f"[SHEET WRITE ERROR] KeyError sor {row_num}: {e}, job keys: {list(job.keys())}")
-        except Exception as e:
-            print(f"[SHEET WRITE ERROR] Exception sor {row_num}: {e}")
+        # PROFESSION.HU formátum (kisbetűs) ÉS NO FLUFF JOBS formátum (nagybetűs) támogatása
+        # Profession.hu: "forras", "pozicio", "ceg", "lokacio", "link", "publikalva", "leiras"
+        # No Fluff Jobs: "Forrás", "Pozíció", "Cég", "Lokáció", "Link", "Publikálva", "Leírás"
+        
+        forrás = job.get("Forrás") or job.get("forras") or ""
+        pozíció = job.get("Pozíció") or job.get("pozicio") or ""
+        cég = job.get("Cég") or job.get("ceg") or ""
+        lokáció = job.get("Lokáció") or job.get("lokacio") or ""
+        link = job.get("Link") or job.get("link") or ""
+        publikálva = job.get("Publikálva") or job.get("publikalva") or ""
+        leírás = job.get("Leírás") or job.get("leiras") or ""
+        fizetés = job.get("Fizetés") or job.get("fizetes") or ""
+        
+        # CELLÁK ÍRÁSA - explicit értékekkel
+        # Debug: első sor részletes kiírása
+        if row_num == 2:
+            print(f"[SHEET WRITE DEBUG] Sor {row_num} előkészítése")
+            print(f"[SHEET WRITE DEBUG] Job objektum: {job}")
+            print(f"[SHEET WRITE DEBUG] Forrás (nagybetűs): {job.get('Forrás')}")
+            print(f"[SHEET WRITE DEBUG] Forrás (kisbetűs): {job.get('forras')}")
+            print(f"[SHEET WRITE DEBUG] Pozíció (nagybetűs): {job.get('Pozíció')}")
+            print(f"[SHEET WRITE DEBUG] Pozíció (kisbetűs): {job.get('pozicio')}")
+        
+        # VALUES EXPLICITEN ÍRVA - nincs feltétel
+        ws.cell(row=row_num, column=2, value=forrás)
+        ws.cell(row=row_num, column=3, value=pozíció)
+        ws.cell(row=row_num, column=4, value=cég)
+        ws.cell(row=row_num, column=5, value=lokáció)
+        ws.cell(row=row_num, column=6, value=fizetés)
+        ws.cell(row=row_num, column=7, value="")  # Munkavégzés_típusa
+        ws.cell(row=row_num, column=8, value="")  # Cég_mérete
+        ws.cell(row=row_num, column=9, value=publikálva)
+        ws.cell(row=row_num, column=10, value=job.get("lekeres_datuma") or "")  # Lekérés_dátuma
+        ws.cell(row=row_num, column=11, value=leírás)
+        ws.cell(row=row_num, column=12, value=link)
+        
+        # Debug: első sor értékek ellenőrzése
+        if row_num == 2:
+            print(f"[SHEET WRITE] Sor {row_num} írva - Forrás='{forrás}', Pozíció='{pozíció}', Cég='{cég}'")
+            # Teszt: írjunk egy statikus értéket is
+            ws.cell(row=row_num, column=13, value="TEST_DEBUG_COLUMN")
+            print(f"[SHEET WRITE] TEST oszlop hozzáadva a 13. oszlophoz")
         
         # Border hozzáadása minden cellához
         for col_num in range(1, len(headers) + 1):
