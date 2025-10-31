@@ -77,14 +77,53 @@ def _scrape_both_quick():
     print(f"[ASYNC] Total: {len(results)} jobs")
     return results
 
+def _scrape_both_full():
+    """Full scraping: Profession dinamikus oldalszám, NoFluff API-first (HTML fallback, no Selenium)"""
+    results = []
+    
+    # Profession full: dinamikus oldalszám (mint eredetileg működött)
+    try:
+        print("[ASYNC] Profession full scraping (dinamikus oldalszám)...")
+        prof = fetch_html_jobs("Profession – IT főkategória", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10", max_pages=None, request_timeout=30) or []
+        results.extend(prof)
+        print(f"[ASYNC] Profession full: {len(prof)} jobs")
+    except Exception as e:
+        print(f"[ASYNC] Profession error: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    # NoFluff API-first, HTML fallback (Selenium nélkül)
+    items = []
+    try:
+        if 'NOFLUFF_API_AVAILABLE' in globals() and NOFLUFF_API_AVAILABLE and 'check_api_health' in globals() and check_api_health():
+            print("[ASYNC] NoFluff API scraping...")
+            items = fetch_nofluff_jobs_api(categories=['artificial-intelligence', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'data', 'testing', 'security', 'embedded']) or []
+            print(f"[ASYNC] NoFluff API: {len(items)} jobs")
+    except Exception as e:
+        print(f"[ASYNC] NoFluff API error: {e}")
+        items = []
+    
+    if not items:
+        try:
+            print("[ASYNC] NoFluff HTML scraping fallback...")
+            items = fetch_nofluffjobs_jobs("No Fluff Jobs – IT kategóriák", "https://nofluffjobs.com/hu/artificial-intelligence?criteria=category%3Dsys-administrator,business-analyst,architecture,backend,data,ux,devops,erp,embedded,frontend,fullstack,game-dev,mobile,project-manager,security,support,testing,other") or []
+            print(f"[ASYNC] NoFluff HTML: {len(items)} jobs")
+        except Exception as e:
+            print(f"[ASYNC] NoFluff HTML error: {e}")
+            items = []
+    
+    results.extend(items)
+    print(f"[ASYNC] Total full scrape: {len(results)} jobs")
+    return results
+
 def _run_async_task(task_id, mode):
     try:
         _set_task(task_id, status='running', progress=5)
         if mode == 'quick':
             data = _scrape_both_quick()
         else:
-            # Fallback to existing synchronous logic in a constrained way
-            data = _scrape_both_quick()
+            # Full scraping: dinamikus oldalszám, teljes lefedettség
+            data = _scrape_both_full()
         _set_task(task_id, status='completed', progress=100, result={
             'total_jobs': len(data),
             'jobs': data
