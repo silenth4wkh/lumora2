@@ -12,14 +12,105 @@ import threading
 import queue
 import os
 import io
+import uuid
 
 try:
     from bs4 import BeautifulSoup
 except Exception:
     BeautifulSoup = None
 
+# No Fluff Jobs API scraper import
+try:
+    from nofluff_api_scraper import fetch_nofluff_jobs_api, check_api_health
+    NOFLUFF_API_AVAILABLE = True
+except ImportError:
+    NOFLUFF_API_AVAILABLE = False
+    print("[WARN] nofluff_api_scraper nem elérhető, HTML scraping használata")
+
 app = Flask(__name__)
 CORS(app)
+# In-memory async task store
+task_store = {}
+task_lock = threading.Lock()
+search_running = threading.Event()
+
+def _set_task(task_id, **kwargs):
+    with task_lock:
+        task = task_store.get(task_id, {})
+        task.update(kwargs)
+        task_store[task_id] = task
+
+def _new_task():
+    tid = str(uuid.uuid4())
+    _set_task(tid, status='pending', progress=0, result=None, error=None)
+    return tid
+
+def _scrape_both_quick():
+    results = []
+    # Profession quick: few pages, short timeout
+    prof = fetch_html_jobs("Profession – IT főkategória", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10", max_pages=5, request_timeout=10) or []
+    results.extend(prof)
+    # NoFluff API-first
+    items = []
+    try:
+        if 'NOFLUFF_API_AVAILABLE' in globals() and NOFLUFF_API_AVAILABLE and 'check_api_health' in globals() and check_api_health():
+            items = fetch_nofluff_jobs_api(categories=['backend','frontend','fullstack','devops','data','testing','security','embedded','mobile','artificial-intelligence']) or []
+    except Exception:
+        items = []
+    if not items:
+        items = fetch_nofluffjobs_jobs("No Fluff Jobs – IT kategóriák", "https://nofluffjobs.com/hu/artificial-intelligence?criteria=category%3Dsys-administrator,business-analyst,architecture,backend,data,ux,devops,erp,embedded,frontend,fullstack,game-dev,mobile,project-manager,security,support,testing,other") or []
+    results.extend(items)
+    return results
+
+def _run_async_task(task_id, mode):
+    try:
+        _set_task(task_id, status='running', progress=5)
+        if mode == 'quick':
+            data = _scrape_both_quick()
+        else:
+            # Fallback to existing synchronous logic in a constrained way
+            data = _scrape_both_quick()
+        _set_task(task_id, status='completed', progress=100, result={
+            'total_jobs': len(data),
+            'jobs': data
+        })
+    except Exception as e:
+        _set_task(task_id, status='failed', error=str(e))
+
+@app.route('/api/search/async', methods=['POST'])
+def start_search_async():
+    body = request.get_json(silent=True) or {}
+    mode = (body.get('mode') or 'quick').lower()
+    tid = _new_task()
+    t = threading.Thread(target=_run_async_task, args=(tid, mode), daemon=True)
+    t.start()
+    return jsonify({'task_id': tid, 'status': 'started', 'mode': mode}), 202
+
+@app.route('/api/progress/<task_id>', methods=['GET'])
+def get_task_progress(task_id):
+    with task_lock:
+        task = task_store.get(task_id)
+        if not task:
+            return jsonify({'error': 'unknown task_id'}), 404
+        return jsonify({'status': task.get('status'), 'progress': task.get('progress'), 'error': task.get('error')})
+
+@app.route('/api/result/<task_id>', methods=['GET'])
+def get_task_result(task_id):
+    with task_lock:
+        task = task_store.get(task_id)
+        if not task:
+            return jsonify({'error': 'unknown task_id'}), 404
+        if task.get('status') != 'completed':
+            return jsonify({'status': task.get('status'), 'error': task.get('error')}), 202
+        return jsonify(task.get('result') or {})
+
+@app.route('/api/reset', methods=['POST'])
+def reset_state():
+    global scraped_jobs
+    with task_lock:
+        task_store.clear()
+    scraped_jobs = []
+    return jsonify({'success': True})
 
 # Error handler for debugging
 @app.errorhandler(Exception)
@@ -597,7 +688,7 @@ def get_total_pages(source_name: str, url: str):
         print(f"[WARNING] {source_name} - Oldalszám meghatározási hiba: {e}, 1 oldal használata")
         return 1
 
-def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
+def fetch_html_jobs(source_name: str, url: str, max_pages: int = None, request_timeout: int = 30):
     """HTML scraping a Profession.hu álláslistákról - dinamikus oldalszám"""
     if not BeautifulSoup:
         print("BeautifulSoup nincs telepítve, RSS fallback használata")
@@ -638,7 +729,7 @@ def fetch_html_jobs(source_name: str, url: str, max_pages: int = None):
             max_retries = 5
             for retry in range(max_retries):
                 try:
-                    r = requests.get(page_url, headers=HEADERS, timeout=30)
+                    r = requests.get(page_url, headers=HEADERS, timeout=request_timeout)
                     r.raise_for_status()
                     break
                 except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.HTTPError, requests.exceptions.RequestException) as e:
@@ -1412,7 +1503,7 @@ def fetch_nofluffjobs_jobs(source_name: str, url: str, max_pages: int = None):
             return fetch_nofluffjobs_fallback(source_name, content)
         
         # Feldolgozzuk a job cards-okat
-        for card in job_cards[:10]:  # Maximum 10 job card
+        for card in job_cards:  # Összes job card (limit eltávolítva)
             try:
                 # Link keresése - a job card maga egy link lehet
                 link = card.get("href") if card.name == "a" else ""
@@ -2150,6 +2241,9 @@ def get_categories():
 @app.route('/api/search', methods=['POST'])
 def search_jobs():
     try:
+        if search_running.is_set():
+            return jsonify({"error": "Keresés már folyamatban van. Próbáld később."}), 409
+        search_running.set()
         data = request.json
         selected_categories = data.get('categories', [])
         
@@ -2194,9 +2288,39 @@ def search_jobs():
                         if items is None:
                             items = []
                     elif "nofluffjobs.com" in keyword_or_url:
-                        # No Fluff Jobs - pagination scraper
+                        # No Fluff Jobs - HIBRID: API elsődleges, pagination fallback
                         url = keyword_or_url
-                        items = fetch_nofluffjobs_jobs_pagination(name, url, max_pages=1000)
+                        items = []
+                        
+                        # 1. Próbáljuk meg az API-t (gyors, pontos dátumokkal)
+                        if NOFLUFF_API_AVAILABLE:
+                            try:
+                                print(f"[NOFLUFF] API próbálkozás...")
+                                if check_api_health():
+                                    # API kategóriák lekérése - összes IT kategória
+                                    api_categories = ['artificial-intelligence', 'backend', 'frontend', 'fullstack', 
+                                                     'mobile', 'devops', 'data', 'testing', 'security', 'embedded']
+                                    api_items = fetch_nofluff_jobs_api(categories=api_categories)
+                                    
+                                    if api_items and len(api_items) >= 50:
+                                        print(f"[NOFLUFF] API SIKERES: {len(api_items)} állás")
+                                        items = api_items
+                                    else:
+                                        print(f"[NOFLUFF] API kevés eredmény ({len(api_items) if api_items else 0}), fallback...")
+                                else:
+                                    print(f"[NOFLUFF] API health check FAILED, fallback...")
+                            except Exception as e:
+                                print(f"[NOFLUFF] API hiba: {e}, fallback...")
+                        
+                        # 2. Fallback: HTML scraping (gyorsabb mint Selenium pagination)
+                        if not items:
+                            print(f"[NOFLUFF] HTML scraping használata...")
+                            try:
+                                items = fetch_nofluffjobs_jobs(name, url)
+                            except Exception as e:
+                                print(f"[NOFLUFF] HTML scraping hiba: {e}")
+                                items = []
+                        
                         # Biztosítjuk, hogy lista legyen
                         if items is None:
                             items = []
@@ -2393,7 +2517,7 @@ def search_jobs():
         duplicate_rate = (total_duplicates / total_processed * 100) if total_processed > 0 else 0
         print(f"\n[DUP] Duplikáció arány: {duplicate_rate:.1f}% ({total_duplicates}/{total_processed})")
         
-        return jsonify({
+        resp = jsonify({
             "message": "Turbó keresés befejezve", 
             "total_jobs": len(all_rows),
             "total_searches": len(search_queries),
@@ -2401,6 +2525,7 @@ def search_jobs():
             "top_sources": dict(sorted_sources),
             "jobs": all_rows  # Összes állás
         })
+        return resp
         
     except Exception as e:
         error_message = f"Keresési hiba: {str(e)}"
@@ -2409,6 +2534,8 @@ def search_jobs():
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": error_message, "type": type(e).__name__}), 500
+    finally:
+        search_running.clear()
 
 @app.route('/api/progress')
 def get_progress():
@@ -3643,6 +3770,101 @@ def test_profession_only():
         print(f"[ERROR] Profession.hu teszt: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+#
+# Dedicated endpoints to run each portal separately (stable, no Selenium pagination)
+#
+@app.route('/api/search/profession-only', methods=['POST'])
+def search_profession_only():
+    """Run Profession.hu scraping for IT main category only.
+    Optional JSON: {"max_pages": 5}
+    """
+    try:
+        if search_running.is_set():
+            return jsonify({"error": "Keresés már folyamatban van. Próbáld később."}), 409
+        search_running.set()
+        print("[RUN] Profession-only scrape start...")
+        source_name = "Profession – IT főkategória"
+        url = "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10"
+        body = request.get_json(silent=True) or {}
+        max_pages = body.get('max_pages', 5)
+        mode = (body.get('mode') or 'quick').lower()
+        if mode == 'quick':
+            print(f"[RUN] Profession mode=quick (job cards, limited pages)")
+            jobs = fetch_html_jobs(source_name, url, max_pages=max_pages, request_timeout=10)
+        else:
+            print(f"[RUN] Profession mode=full (job cards, dynamic pages)")
+            jobs = fetch_html_jobs(source_name, url, max_pages=None)
+        global scraped_jobs
+        scraped_jobs = jobs or []
+        print(f"[RUN] Profession-only done: {len(scraped_jobs)} jobs")
+        resp = jsonify({
+            "success": True,
+            "jobs": scraped_jobs,
+            "count": len(scraped_jobs),
+            "source": "Profession.hu",
+            "method": "html_scraping"
+        })
+        return resp
+    except Exception as e:
+        print(f"[ERROR] Profession-only: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        search_running.clear()
+
+
+@app.route('/api/search/nofluff-only', methods=['POST'])
+def search_nofluff_only():
+    """Run No Fluff Jobs scraping only (API-first, HTML fallback, no Selenium pagination)."""
+    try:
+        if search_running.is_set():
+            return jsonify({"error": "Keresés már folyamatban van. Próbáld később."}), 409
+        search_running.set()
+        print("[RUN] NoFluff-only scrape start (API-first)...")
+        items = []
+        # Try API first if available
+        try:
+            if 'NOFLUFF_API_AVAILABLE' in globals() and NOFLUFF_API_AVAILABLE:
+                if 'check_api_health' in globals() and check_api_health():
+                    api_categories = [
+                        'artificial-intelligence', 'backend', 'frontend', 'fullstack',
+                        'mobile', 'devops', 'data', 'testing', 'security', 'embedded'
+                    ]
+                    items = fetch_nofluff_jobs_api(categories=api_categories) or []
+                    if items:
+                        print(f"[RUN] NoFluff API OK: {len(items)} jobs")
+        except Exception as api_err:
+            print(f"[WARN] NoFluff API failed: {api_err}")
+            items = []
+
+        # Fallback to lightweight HTML scraper (no Selenium pagination)
+        if not items:
+            print("[RUN] NoFluff fallback to HTML scraping...")
+            source_name = "No Fluff Jobs – IT kategóriák"
+            url = "https://nofluffjobs.com/hu/artificial-intelligence?criteria=category%3Dsys-administrator,business-analyst,architecture,backend,data,ux,devops,erp,embedded,frontend,fullstack,game-dev,mobile,project-manager,security,support,testing,other"
+            try:
+                items = fetch_nofluffjobs_jobs(source_name, url) or []
+            except Exception as html_err:
+                print(f"[ERROR] NoFluff HTML scraping failed: {html_err}")
+                items = []
+
+        global scraped_jobs
+        scraped_jobs = items
+        print(f"[RUN] NoFluff-only done: {len(scraped_jobs)} jobs")
+        resp = jsonify({
+            "success": True,
+            "jobs": scraped_jobs,
+            "count": len(scraped_jobs),
+            "source": "No Fluff Jobs",
+            "method": "api_first" if items and items[0].get('_api_source') else "html_scraping"
+        })
+        return resp
+    except Exception as e:
+        print(f"[ERROR] NoFluff-only: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        search_running.clear()
+
 @app.route('/api/test/nofluffjobs-count', methods=['POST'])
 def test_nofluffjobs_count():
     """No Fluff Jobs - job cards számlálása az oldalon"""
@@ -4015,5 +4237,85 @@ def test_verify_links():
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    # Port kiválasztása: első próba 5001, ha foglalt akkor 5002, 5003...
+    import socket
+    import sys
+    
+    def find_free_port(start_port=5001, max_attempts=10):
+        """Megkeresi az első szabad portot - javított verzió"""
+        print(f"[PORT] Szabad port keresése {start_port}-tól...")
+        for i in range(max_attempts):
+            port = start_port + i
+            sock = None
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                # Próbáljuk meg bind-olni - ha sikerül, a port szabad
+                sock.bind(('0.0.0.0', port))
+                sock.close()
+                if i > 0:  # Csak akkor írjuk ki, ha nem az első volt
+                    print(f"[PORT] ✓ Port {port} szabad és használható")
+                return port
+            except OSError as e:
+                if sock:
+                    sock.close()
+                if i == 0:
+                    print(f"[PORT] ✗ Port {port} foglalt, próbálom a következőt...")
+                continue
+        # Ha mind foglalt, próbáljuk meg a 8080-at
+        print(f"[WARN] Nem találtam szabad portot {start_port}-{start_port+max_attempts-1} között")
+        print(f"[PORT] Próbálom a 8080-as portot...")
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(('0.0.0.0', 8080))
+            sock.close()
+            print(f"[PORT] ✓ Port 8080 szabad és használható")
+            return 8080
+        except OSError:
+            print(f"[ERROR] Port 8080 is foglalt!")
+            return start_port  # Fallback - de ezt nem ajánlom
+    
+    # Port meghatározása - MINDIG keressen szabad portot
+    env_port = os.environ.get('PORT', '0')
+    if env_port == '0' or env_port == '':
+        # Automatikus port keresés
+        port = find_free_port(5001)
+    else:
+        port = int(env_port)
+        # Ellenőrizzük hogy az env port szabad-e
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(('0.0.0.0', port))
+            sock.close()
+            print(f"[PORT] ✓ Environment port {port} szabad")
+        except OSError:
+            print(f"[WARN] Environment port {port} foglalt! Automatikus port keresés...")
+            port = find_free_port(5001)
+    
+    print(f"[INFO] Flask szerver indítása porton: {port}")
+    print(f"[INFO] Böngészőben: http://127.0.0.1:{port}")
+    print(f"[INFO]            : http://localhost:{port}")
+    
+    # Flask indítás - ha mégis hiba van, próbáljuk a következő portot
+    max_retries = 5
+    for retry in range(max_retries):
+        try:
+            app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
+            break  # Sikeres indítás
+        except OSError as e:
+            error_msg = str(e).lower()
+            if "address already in use" in error_msg or "only one usage" in error_msg or "winerror 10048" in error_msg:
+                print(f"[ERROR] Port {port} mégis foglalt! (Retry {retry + 1}/{max_retries})")
+                if retry < max_retries - 1:
+                    # Próbáljuk meg a következő portot
+                    port = find_free_port(port + 1, max_attempts=5)
+                    print(f"[PORT] Új port próba: {port}")
+                else:
+                    print("[ERROR] Túl sok próbálkozás! Lehet hogy túl sok Flask szerver fut.")
+                    print("[INFO] Leállítsd a futó Flask szervereket és próbáld újra.")
+                    sys.exit(1)
+            else:
+                # Más hiba, dobjuk fel
+                raise
