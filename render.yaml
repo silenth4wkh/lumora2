@@ -3,4 +3,4 @@ services:
     name: it-allaskereso
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 180 --workers 2 --threads 4
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --threads 2 --graceful-timeout 120
