@@ -48,18 +48,33 @@ def _new_task():
 def _scrape_both_quick():
     results = []
     # Profession quick: few pages, short timeout
-    prof = fetch_html_jobs("Profession – IT főkategória", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10", max_pages=5, request_timeout=10) or []
-    results.extend(prof)
+    try:
+        prof = fetch_html_jobs("Profession – IT főkategória", "https://www.profession.hu/allasok/it-programozas-fejlesztes/1,10", max_pages=5, request_timeout=10) or []
+        results.extend(prof)
+        print(f"[ASYNC] Profession quick: {len(prof)} jobs")
+    except Exception as e:
+        print(f"[ASYNC] Profession error: {e}")
+        import traceback
+        traceback.print_exc()
+    
     # NoFluff API-first
     items = []
     try:
         if 'NOFLUFF_API_AVAILABLE' in globals() and NOFLUFF_API_AVAILABLE and 'check_api_health' in globals() and check_api_health():
             items = fetch_nofluff_jobs_api(categories=['backend','frontend','fullstack','devops','data','testing','security','embedded','mobile','artificial-intelligence']) or []
-    except Exception:
+            print(f"[ASYNC] NoFluff API: {len(items)} jobs")
+    except Exception as e:
+        print(f"[ASYNC] NoFluff API error: {e}")
         items = []
     if not items:
-        items = fetch_nofluffjobs_jobs("No Fluff Jobs – IT kategóriák", "https://nofluffjobs.com/hu/artificial-intelligence?criteria=category%3Dsys-administrator,business-analyst,architecture,backend,data,ux,devops,erp,embedded,frontend,fullstack,game-dev,mobile,project-manager,security,support,testing,other") or []
+        try:
+            items = fetch_nofluffjobs_jobs("No Fluff Jobs – IT kategóriák", "https://nofluffjobs.com/hu/artificial-intelligence?criteria=category%3Dsys-administrator,business-analyst,architecture,backend,data,ux,devops,erp,embedded,frontend,fullstack,game-dev,mobile,project-manager,security,support,testing,other") or []
+            print(f"[ASYNC] NoFluff HTML: {len(items)} jobs")
+        except Exception as e:
+            print(f"[ASYNC] NoFluff HTML error: {e}")
+            items = []
     results.extend(items)
+    print(f"[ASYNC] Total: {len(results)} jobs")
     return results
 
 def _run_async_task(task_id, mode):
