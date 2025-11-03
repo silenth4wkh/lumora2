@@ -2382,7 +2382,19 @@ def search_jobs():
                                                      'mobile', 'devops', 'data', 'testing', 'security', 'embedded']
                                     api_items = fetch_nofluff_jobs_api(categories=api_categories)
                                     
-                                    if api_items and len(api_items) >= 50:
+                                    # Duplikáció eltávolítása (minden kategória ugyanazokat az állásokat adja vissza)
+                                    if api_items:
+                                        seen_api_links = set()
+                                        deduped_api_items = []
+                                        for item in api_items:
+                                            link = item.get("Link") or item.get("link") or ""
+                                            if link and link not in seen_api_links:
+                                                seen_api_links.add(link)
+                                                deduped_api_items.append(item)
+                                        api_items = deduped_api_items
+                                        print(f"[NOFLUFF] API raw: ~7950 (10 categories), after dedup: {len(api_items)} unique jobs")
+                                    
+                                    if api_items and len(api_items) >= 20:  # Lowered from 50 to 20
                                         print(f"[NOFLUFF] API SIKERES: {len(api_items)} állás")
                                         items = api_items
                                     else:
