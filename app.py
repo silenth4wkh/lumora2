@@ -3917,16 +3917,42 @@ def search_nofluff_only():
         # Try API first if available
         try:
             if 'NOFLUFF_API_AVAILABLE' in globals() and NOFLUFF_API_AVAILABLE:
-                if 'check_api_health' in globals() and check_api_health():
+                health_ok = False
+                try:
+                    if 'check_api_health' in globals():
+                        health_ok = check_api_health()
+                except Exception as health_err:
+                    print(f"[RUN] NoFluff health check error: {health_err}")
+                
+                if health_ok:
                     api_categories = [
                         'artificial-intelligence', 'backend', 'frontend', 'fullstack',
                         'mobile', 'devops', 'data', 'testing', 'security', 'embedded'
                     ]
-                    items = fetch_nofluff_jobs_api(categories=api_categories) or []
+                    print(f"[RUN] NoFluff API fetching with {len(api_categories)} categories...")
+                    api_items = fetch_nofluff_jobs_api(categories=api_categories) or []
+                    
+                    # Deduplication (same as in /api/search)
+                    if api_items:
+                        seen_api_links = set()
+                        deduped_api_items = []
+                        for item in api_items:
+                            link = item.get("Link") or item.get("link") or ""
+                            if link and link not in seen_api_links:
+                                seen_api_links.add(link)
+                                deduped_api_items.append(item)
+                        api_items = deduped_api_items
+                        print(f"[RUN] NoFluff API raw: ~7950, after dedup: {len(api_items)} unique jobs")
+                    
+                    items = api_items
                     if items:
                         print(f"[RUN] NoFluff API OK: {len(items)} jobs")
+                else:
+                    print(f"[RUN] NoFluff API health check failed, will try HTML fallback")
         except Exception as api_err:
             print(f"[WARN] NoFluff API failed: {api_err}")
+            import traceback
+            traceback.print_exc()
             items = []
 
         # Fallback to lightweight HTML scraper (no Selenium pagination)
