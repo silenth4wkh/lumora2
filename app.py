@@ -2441,6 +2441,8 @@ def search_jobs():
                         if link:
                             unique_links_in_items.add(link.split('?')[0])
                     print(f"   [DEBUG] No Fluff Jobs - {len(unique_links_in_items)} egyedi link a scraper visszatérésben")
+                    print(f"   [DEBUG] No Fluff Jobs - API használatban: {any(item.get('_api_source') for item in items)}")
+                    print(f"   [DEBUG] No Fluff Jobs - items[0] sample keys: {list(items[0].keys()) if items else 'N/A'}")
                 
                 # Debug: első néhány link ellenőrzése
                 if items:
@@ -2459,6 +2461,19 @@ def search_jobs():
                 
                 # No Fluff Jobs esetén portál-specifikus duplikáció tracking
                 source_seen_links = set()
+                
+                # Debug: előzetes duplikáció ellenőrzés
+                if "nofluffjobs.com" in name.lower():
+                    print(f"   [DEBUG] Feldolgozás előtt: {len(items)} állás")
+                    print(f"   [DEBUG] Globális seen_links száma: {len(seen_links)}")
+                    # Minta linkek ellenőrzése
+                    sample_links_check = []
+                    for item in items[:5]:
+                        link = item.get("Link") or item.get("link") or ""
+                        clean = link.split('?')[0] if link else ""
+                        is_duplicate = clean in seen_links
+                        sample_links_check.append((clean[:50], is_duplicate))
+                    print(f"   [DEBUG] Első 5 link duplikáció állapota: {sample_links_check}")
                 
                 for it in items:
                     # Biztonságos kulcs elérés - támogatás kis- és nagybetűs mezőnevekhez
@@ -2481,8 +2496,8 @@ def search_jobs():
                     # Globális duplikáció ellenőrzés (portálok között)
                     if clean_link in seen_links:
                         skipped += 1
-                        # Debug: miért esett ki
-                        if "nofluffjobs.com" in name.lower():
+                        # Debug: miért esett ki (csak első 3-nál írjuk ki, hogy ne legyen túl sok log)
+                        if "nofluffjobs.com" in name.lower() and skipped <= 3:
                             print(f"   [DEBUG] No Fluff Jobs link kihagyva (globális duplikáció): {clean_link[:80]}")
                         continue
 
@@ -2543,6 +2558,10 @@ def search_jobs():
                         "leiras": (desc_final[:500] if isinstance(desc_final, str) else "")  # Növeltük 500 karakterre
                     })
                     kept += 1
+                    
+                    # Debug: első néhány hozzáadott állás logolása No Fluff Jobs esetén
+                    if "nofluffjobs.com" in name.lower() and kept <= 3:
+                        print(f"   [DEBUG] Hozzáadva No Fluff Jobs állás #{kept}: {title[:50]}, link: {clean_link[:60]}")
 
                     # Gyors mód: nincs delay (teszteléshez)
                     # time.sleep(0.15)
