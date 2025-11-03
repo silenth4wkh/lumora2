@@ -95,12 +95,38 @@ def _scrape_both_full():
     # NoFluff API-first, HTML fallback (Selenium nélkül)
     items = []
     try:
-        if 'NOFLUFF_API_AVAILABLE' in globals() and NOFLUFF_API_AVAILABLE and 'check_api_health' in globals() and check_api_health():
-            print("[ASYNC] NoFluff API scraping...")
-            items = fetch_nofluff_jobs_api(categories=['artificial-intelligence', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'data', 'testing', 'security', 'embedded']) or []
-            print(f"[ASYNC] NoFluff API: {len(items)} jobs")
+        if 'NOFLUFF_API_AVAILABLE' in globals() and NOFLUFF_API_AVAILABLE:
+            # Health check with exception handling
+            health_ok = False
+            try:
+                if 'check_api_health' in globals():
+                    health_ok = check_api_health()
+            except Exception as health_err:
+                print(f"[ASYNC] NoFluff health check error: {health_err}")
+            
+            if health_ok:
+                print("[ASYNC] NoFluff API scraping...")
+                api_items = fetch_nofluff_jobs_api(categories=['artificial-intelligence', 'backend', 'frontend', 'fullstack', 'mobile', 'devops', 'data', 'testing', 'security', 'embedded']) or []
+                
+                # Deduplication
+                if api_items:
+                    seen_links = set()
+                    deduped = []
+                    for item in api_items:
+                        link = item.get("Link") or item.get("link") or ""
+                        if link and link not in seen_links:
+                            seen_links.add(link)
+                            deduped.append(item)
+                    api_items = deduped
+                
+                items = api_items
+                print(f"[ASYNC] NoFluff API: {len(items)} jobs")
+            else:
+                print("[ASYNC] NoFluff API health check failed, will try HTML fallback")
     except Exception as e:
         print(f"[ASYNC] NoFluff API error: {e}")
+        import traceback
+        traceback.print_exc()
         items = []
     
     if not items:
